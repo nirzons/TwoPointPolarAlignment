@@ -15,14 +15,27 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private double exposureTime = 2.0;
         private int gain = 0;
         private ImageSource lastFrame;
+        private string filter = "(Current)";
+        private string binning = "1x1";
+        private int offset = 0;
+        private double telescopeMoveRate = 3.0;
 
         [ImportingConstructor]
         public PolarAlignmentDockableVM(IProfileService profileService) : base(profileService) {
             Title = "2-Point Polar Alignment";
             
-            // Set a beautiful telescope lens crosshair vector icon instead of a generic one
+            // Set the custom 2-Point Polar Alignment icon (simplified arc and two stars for maximum clarity at 16x16 resolution)
             var group = new GeometryGroup();
-            group.Children.Add(Geometry.Parse("M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,6H13V9H11V6M11,15H13V18H11V15M6,11H9V13H6V11M15,11H18V13H15V11M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z"));
+            
+            // 1. Curved tracking arc
+            group.Children.Add(Geometry.Parse("M3,12 A9,9 0 0,1 12,3"));
+            
+            // 2. Left Star (9 o'clock)
+            group.Children.Add(Geometry.Parse("M3,9.5 L4.2,11.8 L6.8,11.8 L4.7,13.3 L5.5,15.6 L3,14.1 L0.5,15.6 L1.3,13.3 L-0.8,11.8 L1.8,11.8 Z"));
+            
+            // 3. Top Star (12 o'clock)
+            group.Children.Add(Geometry.Parse("M12,0.5 L13.2,2.8 L15.8,2.8 L13.7,4.3 L14.5,6.6 L12,5.1 L9.5,6.6 L10.3,4.3 L8.2,2.8 L10.8,2.8 Z"));
+            
             ImageGeometry = group;
         }
 
@@ -81,6 +94,38 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 lastFrame = value;
                 RaisePropertyChanged(nameof(LastFrame));
+            }
+        }
+
+        public string Filter {
+            get => filter;
+            set {
+                filter = value;
+                RaisePropertyChanged(nameof(Filter));
+            }
+        }
+
+        public string Binning {
+            get => binning;
+            set {
+                binning = value;
+                RaisePropertyChanged(nameof(Binning));
+            }
+        }
+
+        public int Offset {
+            get => offset;
+            set {
+                offset = value;
+                RaisePropertyChanged(nameof(Offset));
+            }
+        }
+
+        public double TelescopeMoveRate {
+            get => telescopeMoveRate;
+            set {
+                telescopeMoveRate = value;
+                RaisePropertyChanged(nameof(TelescopeMoveRate));
             }
         }
     }

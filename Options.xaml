@@ -24,6 +24,25 @@
         </ObjectDataProvider.MethodParameters>
     </ObjectDataProvider>
 
+    <!-- Static Arrays for Binning and Filters -->
+    <x:Array x:Key="BinningValues" Type="{x:Type sys:String}">
+        <sys:String>1x1</sys:String>
+        <sys:String>2x2</sys:String>
+        <sys:String>3x3</sys:String>
+        <sys:String>4x4</sys:String>
+    </x:Array>
+
+    <x:Array x:Key="FilterValues" Type="{x:Type sys:String}">
+        <sys:String>(Current)</sys:String>
+        <sys:String>Luminance</sys:String>
+        <sys:String>Red</sys:String>
+        <sys:String>Green</sys:String>
+        <sys:String>Blue</sys:String>
+        <sys:String>Ha</sys:String>
+        <sys:String>OIII</sys:String>
+        <sys:String>SII</sys:String>
+    </x:Array>
+
     <!-- Options DataTemplate (Plugin Options Tab) -->
     <DataTemplate x:Key="2-Point Polar Alignment_Options">
         <StackPanel Orientation="Vertical" Margin="10">
@@ -241,6 +260,8 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -272,15 +293,39 @@
                             </StackPanel>
 
                             <!-- Rotation Method -->
-                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,4,0">
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Method" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Source={StaticResource RotationMethodValues}}" SelectedItem="{Binding Method}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
                             <!-- Starting Point Mode -->
-                            <StackPanel Grid.Row="2" Grid.Column="1" Margin="4,0,0,0">
+                            <StackPanel Grid.Row="2" Grid.Column="1" Margin="4,0,0,6">
                                 <TextBlock Text="Starting Point" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Source={StaticResource StartingPointModeValues}}" SelectedItem="{Binding StartingPoint}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                            </StackPanel>
+
+                            <!-- Filter Selection -->
+                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
+                                <TextBlock Text="Filter" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Source={StaticResource FilterValues}}" SelectedItem="{Binding Filter}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                            </StackPanel>
+
+                            <!-- Binning Selection -->
+                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,0,6">
+                                <TextBlock Text="Binning" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Source={StaticResource BinningValues}}" SelectedItem="{Binding Binning}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                            </StackPanel>
+
+                            <!-- Offset -->
+                            <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,4,0">
+                                <TextBlock Text="Offset" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding Offset, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                            </StackPanel>
+
+                            <!-- Telescope Move Rate -->
+                            <StackPanel Grid.Row="4" Grid.Column="1" Margin="4,0,0,0">
+                                <TextBlock Text="Telescope Move Rate (°/s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding TelescopeMoveRate, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
                         </Grid>
 
