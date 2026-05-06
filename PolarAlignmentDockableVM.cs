@@ -1,12 +1,20 @@
+using System;
 using NINA.WPF.Base.ViewModel;
 using NINA.Profile.Interfaces;
+using NINA.WPF.Base.Interfaces.Mediator;
+using NINA.Equipment.Interfaces.Mediator;
+using NINA.Equipment.Model;
+using NINA.Core.Model.Equipment;
+using NINA.Equipment.Equipment.MyCamera;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Windows.Media;
 
 namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
-    public class PolarAlignmentDockableVM : DockableVM {
+    public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer {
 
         private double rotationAmount = 90.0;
         private RotationMethod method = RotationMethod.Automatic;
@@ -20,9 +28,28 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private int offset = 0;
         private double telescopeMoveRate = 3.0;
 
+        private readonly ICameraMediator cameraMediator;
+        private readonly ITelescopeMediator telescopeMediator;
+        private readonly System.Windows.Threading.DispatcherTimer statusTimer;
+        private bool lastIsCameraConnected;
+        private bool lastIsMountConnected;
+
         [ImportingConstructor]
-        public PolarAlignmentDockableVM(IProfileService profileService) : base(profileService) {
+        public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator) : base(profileService) {
+            this.cameraMediator = cameraMediator;
+            this.telescopeMediator = telescopeMediator;
             Title = "2-Point Polar Alignment";
+
+            // Initialize connection states
+            lastIsCameraConnected = IsCameraConnected;
+            lastIsMountConnected = IsMountConnected;
+
+            // Start a lightweight 1-second status polling timer as a bulletproof mechanism for equipment connection changes
+            statusTimer = new System.Windows.Threading.DispatcherTimer {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            statusTimer.Tick += StatusTimer_Tick;
+            statusTimer.Start();
             
             // Set the custom 2-Point Polar Alignment icon (simplified arc and two stars for maximum clarity at 16x16 resolution)
             var group = new GeometryGroup();
@@ -40,6 +67,39 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public override bool IsTool => true;
+
+        public bool IsCameraConnected => cameraMediator?.GetInfo()?.Connected ?? false;
+
+        public bool IsMountConnected => telescopeMediator?.GetInfo()?.Connected ?? false;
+
+        public bool CanRun => IsCameraConnected && IsMountConnected;
+
+        private void StatusTimer_Tick(object sender, EventArgs e) {
+            var currentCamera = IsCameraConnected;
+            var currentMount = IsMountConnected;
+
+            if (currentCamera != lastIsCameraConnected) {
+                lastIsCameraConnected = currentCamera;
+                RaisePropertyChanged(nameof(IsCameraConnected));
+                RaisePropertyChanged(nameof(CanRun));
+            }
+
+            if (currentMount != lastIsMountConnected) {
+                lastIsMountConnected = currentMount;
+                RaisePropertyChanged(nameof(IsMountConnected));
+                RaisePropertyChanged(nameof(CanRun));
+            }
+        }
+
+        public void UpdateDeviceInfo(CameraInfo deviceInfo) {
+            // Unused but required by ICameraConsumer
+        }
+
+        public void Dispose() {
+            try {
+                statusTimer?.Stop();
+            } catch { }
+        }
 
         public double RotationAmount {
             get => rotationAmount;
@@ -126,6 +186,67 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 telescopeMoveRate = value;
                 RaisePropertyChanged(nameof(TelescopeMoveRate));
+            }
+        }
+
+        public IEnumerable<string> Filters {
+            get {
+                var list = new List<string> { "(Current)" };
+                try {
+                    if (profileService?.ActiveProfile != null) {
+                        var profileType = profileService.ActiveProfile.GetType();
+                        
+                        // Try FilterWheelSettings.FilterWheelFilters
+                        var fwSettingsProp = profileType.GetProperty("FilterWheelSettings");
+                        if (fwSettingsProp != null) {
+                            var fwSettings = fwSettingsProp.GetValue(profileService.ActiveProfile);
+                            if (fwSettings != null) {
+                                var fwFiltersProp = fwSettings.GetType().GetProperty("FilterWheelFilters");
+                                if (fwFiltersProp != null) {
+                                    var fwFilters = fwFiltersProp.GetValue(fwSettings);
+                                    if (fwFilters is System.Collections.IEnumerable enumerable) {
+                                        foreach (var item in enumerable) {
+                                            var nameProp = item.GetType().GetProperty("Name");
+                                            if (nameProp != null) {
+                                                var name = nameProp.GetValue(item) as string;
+                                                if (!string.IsNullOrEmpty(name)) {
+                                                    list.Add(name);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fallback to legacy Filters or FilterSettings property if list has only "(Current)"
+                        if (list.Count == 1) {
+                            var filtersProp = profileType.GetProperty("Filters") ?? profileType.GetProperty("FilterSettings");
+                            if (filtersProp != null) {
+                                var filtersValue = filtersProp.GetValue(profileService.ActiveProfile);
+                                if (filtersValue is System.Collections.IEnumerable enumerable) {
+                                    foreach (var item in enumerable) {
+                                        var nameProp = item.GetType().GetProperty("Name");
+                                        if (nameProp != null) {
+                                            var name = nameProp.GetValue(item) as string;
+                                            if (!string.IsNullOrEmpty(name)) {
+                                                list.Add(name);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {
+                    // Fail-safe suppression
+                }
+
+                if (list.Count == 1) {
+                    list.AddRange(new[] { "Luminance", "Red", "Green", "Blue", "Ha", "OIII", "SII" });
+                }
+                return list;
             }
         }
     }

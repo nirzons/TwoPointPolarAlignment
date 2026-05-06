@@ -178,21 +178,66 @@
             </Grid.RowDefinitions>
 
             <!-- Header and Status Card -->
-            <Border Grid.Row="0" CornerRadius="8" Background="{DynamicResource MahApps.Brushes.Subtle}" Padding="15" Margin="0,0,0,15" BorderThickness="1" BorderBrush="{DynamicResource MahApps.Brushes.Accent}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Orientation="Vertical">
-                        <TextBlock Text="2-Point Polar Alignment" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" />
-                        <TextBlock Text="Align your mount with high precision using two plate-solved points." FontSize="12" Foreground="Gray" Margin="0,4,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <Border Grid.Column="1" CornerRadius="4" Background="#1D2A3A" Padding="8,4" VerticalAlignment="Center">
-                        <TextBlock Text="Ready to Start" FontWeight="Bold" Foreground="#72BDFF" FontSize="11" />
-                    </Border>
-                </Grid>
-            </Border>
+            <StackPanel Grid.Row="0" Orientation="Vertical">
+                <Border CornerRadius="8" Background="{DynamicResource MahApps.Brushes.Subtle}" Padding="15" Margin="0,0,0,10" BorderThickness="1" BorderBrush="{DynamicResource MahApps.Brushes.Accent}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Vertical">
+                            <TextBlock Text="2-Point Polar Alignment" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" />
+                            <TextBlock Text="Align your mount with high precision using two plate-solved points." FontSize="12" Foreground="Gray" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Border Grid.Column="1" CornerRadius="4" Background="#1D2A3A" Padding="8,4" VerticalAlignment="Center">
+                            <TextBlock Text="Ready to Start" FontWeight="Bold" Foreground="#72BDFF" FontSize="11" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Equipment Connection Alert Messages -->
+                <Border CornerRadius="4" Background="#3A1A1A" BorderThickness="1" BorderBrush="#FF4C4C" Padding="10,6" Margin="0,0,0,6">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCameraConnected}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="⚠" Foreground="#FF4C4C" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="CAMERA NOT CONNECTED - Connect a camera to use this plugin" Foreground="#FF8C8C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <Border CornerRadius="4" Background="#3A1A1A" BorderThickness="1" BorderBrush="#FF4C4C" Padding="10,6" Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMountConnected}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="⚠" Foreground="#FF4C4C" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="TELESCOPE NOT CONNECTED - Connect a telescope/mount to use this plugin" Foreground="#FF8C8C" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+            </StackPanel>
 
             <!-- Measurements, Image Preview, and Actions Area (3-Column Layout) -->
             <Grid Grid.Row="1">
@@ -307,7 +352,7 @@
                             <!-- Filter Selection -->
                             <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Filter" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <ComboBox ItemsSource="{Binding Source={StaticResource FilterValues}}" SelectedItem="{Binding Filter}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                                <ComboBox ItemsSource="{Binding Filters}" SelectedItem="{Binding Filter}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
                             <!-- Binning Selection -->
@@ -340,7 +385,7 @@
                         </Border>
 
                         <!-- Main Play Button -->
-                        <Button Grid.Row="3" Content="Start Alignment Sequence" Height="34" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand">
+                        <Button Grid.Row="3" Content="Start Alignment Sequence" Height="34" IsEnabled="{Binding CanRun}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand">
                             <Button.Resources>
                                 <Style TargetType="Border">
                                     <Setter Property="CornerRadius" Value="6" />
