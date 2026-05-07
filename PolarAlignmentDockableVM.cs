@@ -82,8 +82,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private bool lastIsMountConnected;
         private bool hasExecutedBefore = false;
         private Coordinates homePosition;
-        private double recordedAlt = 0;
-        private double recordedAz = 0;
+        private double recordedDec = 0;
+        private double recordedRA = 0;
+        private double recordedHA = 0;
         private bool hasRecordedPosition = false;
         private Coordinates coordinates1;
         private double angle1;
@@ -368,7 +369,18 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
             await Task.Delay(1000);
 
-            // ==================== PHASE B: Initial Positioning & Verification ====================
+            // Save original tracking state and disable tracking for polar alignment
+            bool originalTracking = false;
+            try {
+                originalTracking = telescopeMediator.GetInfo()?.TrackingEnabled ?? false;
+                if (originalTracking) {
+                    telescopeMediator.SetTrackingEnabled(false);
+                    Log("Disabling telescope tracking for polar alignment sequence.");
+                }
+            } catch { }
+
+            try {
+                // ==================== PHASE B: Initial Positioning & Verification ====================
             bool isSimulation = (cameraMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false) ||
                                 (telescopeMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false);
 
@@ -397,12 +409,23 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     Log($"First run verified at Home position (RA: {homePosition.RAString}, Dec: {homePosition.DecString}). Reference state initialized.");
                 } else {
                     var info = telescopeMediator.GetInfo();
-                    double currentAlt = info?.Altitude ?? 0;
-                    double currentAz = info?.Azimuth ?? 0;
+                    double currentDec = info?.Declination ?? 0;
+                    double currentRA = info?.RightAscension ?? 0;
+                    double lst = info?.SiderealTime ?? 0;
+                    double currentHA = lst - currentRA;
+                    if (currentHA < 0) currentHA += 24.0;
+                    if (currentHA >= 24.0) currentHA -= 24.0;
 
+                    double haDiff = Math.Abs(currentHA - recordedHA);
+                    if (haDiff > 12.0) haDiff = 24.0 - haDiff;
+
+                    double raDiff = Math.Abs(currentRA - recordedRA);
+                    if (raDiff > 12.0) raDiff = 24.0 - raDiff;
+
+                    double toleranceHours = 0.25 / 15.0;
                     bool isValidRetry = hasRecordedPosition && 
-                                        Math.Abs(currentAlt - recordedAlt) < 0.25 && 
-                                        Math.Abs(currentAz - recordedAz) < 0.25;
+                                        Math.Abs(currentDec - recordedDec) < 0.25 && 
+                                        (haDiff < toleranceHours || raDiff < toleranceHours);
 
                     if (!isValidRetry) {
                         string errMsg = "Telescope has been moved from its recorded position. Please move the telescope to the home position and start again.";
@@ -412,10 +435,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         throw new InvalidOperationException(errMsg);
                     }
 
-                    Log($"Valid retry detected (Alt: {currentAlt:F2}°, Az: {currentAz:F2}° matches recorded Alt: {recordedAlt:F2}°, Az: {recordedAz:F2}°).");
+                    Log($"Valid retry detected (Dec: {currentDec:F2}°, RA: {currentRA:F4}h, HA: {currentHA:F2}h matches recorded Dec: {recordedDec:F2}°, RA: {recordedRA:F4}h, HA: {recordedHA:F4}h).");
                     if (homePosition != null) {
                         Log($"Automatically slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString})...");
                         await telescopeMediator.SlewToCoordinatesAsync(homePosition, CancellationToken.None);
+                        try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                         Log("Successfully returned to Home Position.");
                         currentPosition = homePosition;
                     }
@@ -499,19 +523,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
                 Coordinates targetCoords = new Coordinates(targetRA, currentPosition.Dec, currentPosition.Epoch, Coordinates.RAType.Hours);
                 await telescopeMediator.SlewToCoordinatesAsync(targetCoords, CancellationToken.None);
+                try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                 Log("Pre-rotation completed successfully.");
             } else {
                 Log("Starting at current/home position.");
             }
 
-            // Record target Alt/Az position for valid retry check
-            if (Method == RotationMethod.Automatic) {
-                var info = telescopeMediator.GetInfo();
-                recordedAlt = info?.Altitude ?? 0;
-                recordedAz = info?.Azimuth ?? 0;
-                hasRecordedPosition = true;
-                Log($"Recorded target position Alt: {recordedAlt:F2}°, Az: {recordedAz:F2}° for subsequent retry verification.");
-            }
 
             // ==================== PHASE C: First Measurement ====================
             Log("Initiating Phase C (First Measurement)...");
@@ -643,6 +660,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 Coordinates targetCoords = new Coordinates(targetRA, physicalPos.Dec, physicalPos.Epoch, Coordinates.RAType.Hours);
                 Log($"Automatically slewing RA axis by {RotationAmount:F1}° {Direction} to target RA {targetCoords.RAString}...");
                 await telescopeMediator.SlewToCoordinatesAsync(targetCoords, CancellationToken.None);
+                try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                 Log("Automatic rotation completed successfully.");
             }
 
@@ -730,7 +748,31 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
 
             Log("Saved Measurement 2 -> RA 2, Dec 2, Angle 2.");
+
+            // Record final target DEC/RA/HA position for subsequent retry checks
+            if (Method == RotationMethod.Automatic) {
+                var info = telescopeMediator.GetInfo();
+                recordedDec = info?.Declination ?? 0;
+                recordedRA = info?.RightAscension ?? 0;
+                double lst = info?.SiderealTime ?? 0;
+                double calculatedHA = lst - recordedRA;
+                if (calculatedHA < 0) calculatedHA += 24.0;
+                if (calculatedHA >= 24.0) calculatedHA -= 24.0;
+                recordedHA = calculatedHA;
+                hasRecordedPosition = true;
+                Log($"Recorded final target position Dec: {recordedDec:F2}°, RA: {recordedRA:F4}h, HA: {recordedHA:F4}h for subsequent retry verification.");
+            }
+
             Notification.ShowSuccess("2-Point Polar Alignment: Phase E (Second Measurement) completed successfully!");
+            }
+            finally {
+                try {
+                    if (originalTracking) {
+                        telescopeMediator.SetTrackingEnabled(true);
+                        Log("Restored telescope tracking to its original state (Enabled).");
+                    }
+                } catch { }
+            }
         }
 
         public IEnumerable<string> Filters {
