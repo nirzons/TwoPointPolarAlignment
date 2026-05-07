@@ -40,13 +40,28 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
     }
 
+    public enum RotationMethod {
+        Automatic,
+        Manual
+    }
+
+    public enum RotationDirection {
+        East,
+        West
+    }
+
+    public enum StartingPointMode {
+        StartAtHome,
+        PreRotateHalfRange
+    }
+
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
     public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer {
 
         private double rotationAmount = 90.0;
         private RotationMethod method = RotationMethod.Automatic;
         private RotationDirection direction = RotationDirection.East;
-        private StartingPointMode startingPoint = StartingPointMode.StartAtHome;
+        private StartingPointMode startingPoint = StartingPointMode.PreRotateHalfRange;
         private double exposureTime = 2.0;
         private int gain = 0;
         private ImageSource lastFrame;
@@ -70,6 +85,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private double recordedAlt = 0;
         private double recordedAz = 0;
         private bool hasRecordedPosition = false;
+        private Coordinates coordinates1;
+        private double angle1;
+        private Coordinates coordinates2;
+        private double angle2;
 
         [ImportingConstructor]
         public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator, IPlateSolverFactory plateSolverFactory, IImagingMediator imagingMediator, IFilterWheelMediator filterWheelMediator) : base(profileService) {
@@ -275,7 +294,17 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 return;
             }
 
-            // 3. Verify Plate Solver Configuration
+            // 3. Verify Filter Wheel Connection (If a specific filter is selected)
+            if (!string.IsNullOrEmpty(Filter) && Filter != "(Current)") {
+                bool isFWConnected = filterWheelMediator?.GetInfo()?.Connected ?? false;
+                if (!isFWConnected) {
+                    Log($"Error: Specific filter '{Filter}' is selected, but the Filter Wheel is not connected!");
+                    Notification.ShowError($"2-Point Polar Alignment Error: Specific filter '{Filter}' is selected, but the Filter Wheel is not connected!");
+                    return;
+                }
+            }
+
+            // 4. Verify Plate Solver Configuration
             bool isSolverOk = false;
             string detectedSolverName = "Unknown";
             try {
@@ -360,7 +389,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     if (!isNearPole) {
                         string errMsg = "Telescope is not in the home position. Please move the telescope to the home position first.";
                         Log($"Error: {errMsg}");
-                        Notification.ShowError($"2-Point Polar Alignment Error: {errMsg}");
                         throw new InvalidOperationException(errMsg);
                     }
 
@@ -379,7 +407,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     if (!isValidRetry) {
                         string errMsg = "Telescope has been moved from its recorded position. Please move the telescope to the home position and start again.";
                         Log($"Error: {errMsg}");
-                        Notification.ShowError($"2-Point Polar Alignment Error: {errMsg}");
                         hasExecutedBefore = false;
                         hasRecordedPosition = false;
                         throw new InvalidOperationException(errMsg);
@@ -393,6 +420,71 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         currentPosition = homePosition;
                     }
                 }
+            }
+
+            // 1. Filter Wheel Check (Done at safe static home position before any mount movement)
+            if (!string.IsNullOrEmpty(Filter) && Filter != "(Current)") {
+                if (filterWheelMediator == null) {
+                    throw new InvalidOperationException("Filter wheel is requested but the filter wheel mediator is unavailable.");
+                }
+
+                FilterInfo targetFilterInfo = null;
+                try {
+                    if (profileService?.ActiveProfile != null) {
+                        var profileType = profileService.ActiveProfile.GetType();
+                        var fwSettingsProp = profileType.GetProperty("FilterWheelSettings");
+                        if (fwSettingsProp != null) {
+                            var fwSettings = fwSettingsProp.GetValue(profileService.ActiveProfile);
+                            if (fwSettings != null) {
+                                var fwFiltersProp = fwSettings.GetType().GetProperty("FilterWheelFilters");
+                                if (fwFiltersProp != null) {
+                                    var fwFilters = fwFiltersProp.GetValue(fwSettings);
+                                    if (fwFilters is System.Collections.IEnumerable enumerable) {
+                                        foreach (var item in enumerable) {
+                                            var nameProp = item.GetType().GetProperty("Name");
+                                            var name = nameProp?.GetValue(item) as string;
+                                            if (name == Filter) {
+                                                var posProp = item.GetType().GetProperty("Position");
+                                                short pos = posProp != null ? Convert.ToInt16(posProp.GetValue(item)) : (short)0;
+                                                targetFilterInfo = new FilterInfo { Name = name, Position = pos };
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (targetFilterInfo == null) {
+                            var filtersProp = profileType.GetProperty("Filters") ?? profileType.GetProperty("FilterSettings");
+                            if (filtersProp != null) {
+                                var filtersValue = filtersProp.GetValue(profileService.ActiveProfile);
+                                if (filtersValue is System.Collections.IEnumerable enumerable) {
+                                    foreach (var item in enumerable) {
+                                        var nameProp = item.GetType().GetProperty("Name");
+                                        var name = nameProp?.GetValue(item) as string;
+                                        if (name == Filter) {
+                                            var posProp = item.GetType().GetProperty("Position");
+                                            short pos = posProp != null ? Convert.ToInt16(posProp.GetValue(item)) : (short)0;
+                                            targetFilterInfo = new FilterInfo { Name = name, Position = pos };
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                if (targetFilterInfo == null) {
+                    targetFilterInfo = new FilterInfo { Name = Filter, Position = 0 };
+                }
+
+                Log($"Changing filter to {Filter} (Position: {targetFilterInfo.Position})...");
+                var filterProgress = new Progress<ApplicationStatus>();
+                await filterWheelMediator.ChangeFilter(targetFilterInfo, CancellationToken.None, filterProgress);
+                Log($"Filter successfully changed to {Filter}.");
             }
 
             // 1. Mount Slewing (Pre-rotation if requested)
@@ -421,6 +513,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 Log($"Recorded target position Alt: {recordedAlt:F2}°, Az: {recordedAz:F2}° for subsequent retry verification.");
             }
 
+            // ==================== PHASE C: First Measurement ====================
+            Log("Initiating Phase C (First Measurement)...");
+
             // 2. Camera Exposure and Plate Solving
             Log("Capturing starting image and solving...");
 
@@ -447,7 +542,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 var simPosition = telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
                 result = new PlateSolveResult {
                     Success = true,
-                    Coordinates = new Coordinates(simPosition.RA, simPosition.Dec, simPosition.Epoch, Coordinates.RAType.Hours)
+                    Coordinates = simPosition,
+                    PositionAngle = 45.0
                 };
             } else {
                 var profile = profileService.ActiveProfile;
@@ -480,8 +576,161 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 throw new InvalidOperationException("Initial plate solve failed. Ensure exposure settings are correct and the sky is clear.");
             }
 
-            Log($"Solved initial coordinates successfully: RA {result.Coordinates.RAString}, Dec {result.Coordinates.DecString}");
-            Notification.ShowSuccess("2-Point Polar Alignment: Phase B (Initial Positioning & Verification) completed successfully!");
+            // 4. Coordinate Storage
+            coordinates1 = result.Coordinates;
+            angle1 = result.PositionAngle;
+
+            Log($"Solved initial coordinates successfully: RA {coordinates1.RAString}, Dec {coordinates1.DecString}, Orientation Angle: {angle1:F2}°");
+
+            // Safety check: verify solved coordinates are not too far from the mount's physical position
+            var physicalPos1 = telescopeMediator.GetCurrentPosition();
+            if (physicalPos1 != null) {
+                double searchRadius = 15.0; // default fallback
+                try {
+                    var profile = profileService.ActiveProfile;
+                    var settings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile);
+                    var radiusProp = settings?.GetType().GetProperty("SearchRadius");
+                    if (radiusProp != null) {
+                        searchRadius = Convert.ToDouble(radiusProp.GetValue(settings) ?? 15.0);
+                    }
+                } catch { }
+
+                double safetyThreshold = Math.Max(5.0, searchRadius - 5.0);
+
+                double lat1 = physicalPos1.Dec * Math.PI / 180.0;
+                double lat2 = coordinates1.Dec * Math.PI / 180.0;
+                double dLon = (physicalPos1.RA - coordinates1.RA) * 15.0 * Math.PI / 180.0;
+
+                double cosTheta = Math.Sin(lat1) * Math.Sin(lat2) + Math.Cos(lat1) * Math.Cos(lat2) * Math.Cos(dLon);
+                cosTheta = Math.Clamp(cosTheta, -1.0, 1.0);
+                double separation = Math.Acos(cosTheta) * 180.0 / Math.PI;
+
+                Log($"Solver/Mount Separation (M1): {separation:F2}° (Active Solver Search Radius: {searchRadius:F1}°, Safety Threshold: {safetyThreshold:F1}°).");
+
+                if (separation > safetyThreshold) {
+                    string errMsg = $"Safety Intercept: The plate solved position is too far from the mount's reported position ({separation:F2}° separation exceeds the {safetyThreshold:F1}° safety threshold). Alignment aborted for safety.";
+                    Log($"Error: {errMsg}");
+                    throw new InvalidOperationException(errMsg);
+                }
+            }
+
+            Log("Saved Measurement 1 -> RA 1, Dec 1, Angle 1.");
+            Notification.ShowSuccess("2-Point Polar Alignment: Phase C (First Measurement) completed successfully!");
+
+            await Task.Delay(1000);
+
+            // ==================== PHASE D: The Rotation ====================
+            Log("Initiating Phase D (The Rotation)...");
+
+            if (Method == RotationMethod.Manual) {
+                Log($"[Manual Rotation] Please release the clutches, manually rotate the RA axis by approximately {RotationAmount:F1}° {Direction}, re-engage clutches, and click OK.");
+                System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                    System.Windows.MessageBox.Show(
+                        $"Please release the clutches, manually rotate the RA axis by approximately {RotationAmount:F1}° {Direction}, re-engage the clutches, and click OK to continue.",
+                        "Manual RA Rotation Required",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information
+                    );
+                });
+                Log("Manual rotation completed by user.");
+            } else {
+                var physicalPos = telescopeMediator.GetCurrentPosition() ?? coordinates1;
+                double offsetHours = RotationAmount / 15.0;
+                double targetRA = physicalPos.RA + (Direction == RotationDirection.East ? offsetHours : -offsetHours);
+                if (targetRA < 0) targetRA += 24.0;
+                if (targetRA >= 24.0) targetRA -= 24.0;
+ 
+                Coordinates targetCoords = new Coordinates(targetRA, physicalPos.Dec, physicalPos.Epoch, Coordinates.RAType.Hours);
+                Log($"Automatically slewing RA axis by {RotationAmount:F1}° {Direction} to target RA {targetCoords.RAString}...");
+                await telescopeMediator.SlewToCoordinatesAsync(targetCoords, CancellationToken.None);
+                Log("Automatic rotation completed successfully.");
+            }
+
+            await Task.Delay(1000);
+
+            // ==================== PHASE E: Second Measurement ====================
+            Log("Initiating Phase E (Second Measurement)...");
+
+            if (isSimulation) {
+                Log("[Simulator] Simulating 3s camera exposure and plate solve for Measurement 2...");
+                await Task.Delay(3000);
+                var simPosition = telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
+                result = new PlateSolveResult {
+                    Success = true,
+                    Coordinates = simPosition,
+                    PositionAngle = angle1 + (Direction == RotationDirection.East ? RotationAmount : -RotationAmount)
+                };
+            } else {
+                Log("Capturing second image and solving...");
+                var profile = profileService.ActiveProfile;
+                var plateSolveSettings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+                if (plateSolveSettings == null) {
+                    throw new InvalidOperationException("Could not retrieve active plate solve settings.");
+                }
+
+                IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
+                IPlateSolver blindSolver = plateSolverFactory.GetBlindSolver(plateSolveSettings);
+                ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, blindSolver, imagingMediator, filterWheelMediator);
+
+                CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                    Attempts = 1,
+                    ReattemptDelay = TimeSpan.FromSeconds(2),
+                    FocalLength = profile.TelescopeSettings.FocalLength,
+                    PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
+                    Binning = binVal,
+                    DisableNotifications = true
+                };
+
+                var solveProgress = new Progress<PlateSolveProgress>();
+                var appProgress = new Progress<ApplicationStatus>();
+
+                result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, CancellationToken.None);
+            }
+
+            if (result == null || !result.Success) {
+                Notification.ShowError("2-Point Polar Alignment Error: Second plate solve failed!");
+                throw new InvalidOperationException("Second plate solve failed. Ensure exposure settings are correct and the sky is clear.");
+            }
+
+            coordinates2 = result.Coordinates;
+            angle2 = result.PositionAngle;
+
+            Log($"Solved second coordinates successfully: RA {coordinates2.RAString}, Dec {coordinates2.DecString}, Orientation Angle: {angle2:F2}°");
+
+            // Safety check: verify second solved coordinates are not too far from the mount's physical position
+            var physicalPos2 = telescopeMediator.GetCurrentPosition();
+            if (physicalPos2 != null) {
+                double searchRadius = 15.0; // default fallback
+                try {
+                    var profile = profileService.ActiveProfile;
+                    var settings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile);
+                    var radiusProp = settings?.GetType().GetProperty("SearchRadius");
+                    if (radiusProp != null) {
+                        searchRadius = Convert.ToDouble(radiusProp.GetValue(settings) ?? 15.0);
+                    }
+                } catch { }
+
+                double safetyThreshold = Math.Max(5.0, searchRadius - 5.0);
+
+                double lat1 = physicalPos2.Dec * Math.PI / 180.0;
+                double lat2 = coordinates2.Dec * Math.PI / 180.0;
+                double dLon = (physicalPos2.RA - coordinates2.RA) * 15.0 * Math.PI / 180.0;
+
+                double cosTheta = Math.Sin(lat1) * Math.Sin(lat2) + Math.Cos(lat1) * Math.Cos(lat2) * Math.Cos(dLon);
+                cosTheta = Math.Clamp(cosTheta, -1.0, 1.0);
+                double separation = Math.Acos(cosTheta) * 180.0 / Math.PI;
+
+                Log($"Solver/Mount Separation (M2): {separation:F2}° (Active Solver Search Radius: {searchRadius:F1}°, Safety Threshold: {safetyThreshold:F1}°).");
+
+                if (separation > safetyThreshold) {
+                    string errMsg = $"Safety Intercept: The second plate solved position is too far from the mount's reported position ({separation:F2}° separation exceeds the {safetyThreshold:F1}° safety threshold). Alignment aborted for safety.";
+                    Log($"Error: {errMsg}");
+                    throw new InvalidOperationException(errMsg);
+                }
+            }
+
+            Log("Saved Measurement 2 -> RA 2, Dec 2, Angle 2.");
+            Notification.ShowSuccess("2-Point Polar Alignment: Phase E (Second Measurement) completed successfully!");
         }
 
         public IEnumerable<string> Filters {
