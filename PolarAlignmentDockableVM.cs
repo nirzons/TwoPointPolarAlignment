@@ -7,6 +7,12 @@ using NINA.Equipment.Model;
 using NINA.Core.Model.Equipment;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Core.Utility.Notification;
+using NINA.PlateSolving;
+using NINA.PlateSolving.Interfaces;
+using NINA.Astrometry;
+using NINA.Core.Model;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
@@ -53,14 +59,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         private readonly ICameraMediator cameraMediator;
         private readonly ITelescopeMediator telescopeMediator;
+        private readonly IPlateSolverFactory plateSolverFactory;
+        private readonly IImagingMediator imagingMediator;
+        private readonly IFilterWheelMediator filterWheelMediator;
         private readonly System.Windows.Threading.DispatcherTimer statusTimer;
         private bool lastIsCameraConnected;
         private bool lastIsMountConnected;
+        private bool hasExecutedBefore = false;
+        private Coordinates homePosition;
+        private double recordedAlt = 0;
+        private double recordedAz = 0;
+        private bool hasRecordedPosition = false;
 
         [ImportingConstructor]
-        public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator) : base(profileService) {
+        public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator, IPlateSolverFactory plateSolverFactory, IImagingMediator imagingMediator, IFilterWheelMediator filterWheelMediator) : base(profileService) {
             this.cameraMediator = cameraMediator;
             this.telescopeMediator = telescopeMediator;
+            this.plateSolverFactory = plateSolverFactory;
+            this.imagingMediator = imagingMediator;
+            this.filterWheelMediator = filterWheelMediator;
             Title = "2-Point Polar Alignment";
 
             // Initialize connection states
@@ -228,6 +245,17 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public void StartAlignment() {
+            Task.Run(async () => {
+                try {
+                    await StartAlignmentAsync();
+                } catch (Exception ex) {
+                    Log($"[Error] Alignment failed: {ex.Message}");
+                    Notification.ShowError($"Alignment failed: {ex.Message}");
+                }
+            });
+        }
+
+        private async Task StartAlignmentAsync() {
             Logs = $"[{DateTime.Now:HH:mm:ss}] [System] Starting alignment sequence...";
             Log("Initiating Phase A (Pre-flight Checks)...");
 
@@ -308,6 +336,152 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             Log($"Valid Plate Solver found: {detectedSolverName}");
             Log("Phase A (Pre-flight Checks) completed successfully!");
             Notification.ShowSuccess("2-Point Polar Alignment: Pre-flight checks passed successfully!");
+
+            await Task.Delay(1000);
+
+            // ==================== PHASE B: Initial Positioning & Verification ====================
+            bool isSimulation = (cameraMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                                (telescopeMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false);
+
+            if (isSimulation) {
+                Log("Simulator detected! Running in Simulation Mode.");
+            }
+
+            Log("Initiating Phase B (Initial Positioning & Verification)...");
+
+            var currentPosition = telescopeMediator.GetCurrentPosition();
+            if (currentPosition == null) {
+                throw new InvalidOperationException("Could not retrieve current telescope position.");
+            }
+
+            if (Method == RotationMethod.Automatic) {
+                if (!hasExecutedBefore) {
+                    bool isNearPole = Math.Abs(Math.Abs(currentPosition.Dec) - 90.0) < 1.0;
+                    if (!isNearPole) {
+                        string errMsg = "Telescope is not in the home position. Please move the telescope to the home position first.";
+                        Log($"Error: {errMsg}");
+                        Notification.ShowError($"2-Point Polar Alignment Error: {errMsg}");
+                        throw new InvalidOperationException(errMsg);
+                    }
+
+                    homePosition = new Coordinates(currentPosition.RA, currentPosition.Dec, currentPosition.Epoch, Coordinates.RAType.Hours);
+                    hasExecutedBefore = true;
+                    Log($"First run verified at Home position (RA: {homePosition.RAString}, Dec: {homePosition.DecString}). Reference state initialized.");
+                } else {
+                    var info = telescopeMediator.GetInfo();
+                    double currentAlt = info?.Altitude ?? 0;
+                    double currentAz = info?.Azimuth ?? 0;
+
+                    bool isValidRetry = hasRecordedPosition && 
+                                        Math.Abs(currentAlt - recordedAlt) < 0.25 && 
+                                        Math.Abs(currentAz - recordedAz) < 0.25;
+
+                    if (!isValidRetry) {
+                        string errMsg = "Telescope has been moved from its recorded position. Please move the telescope to the home position and start again.";
+                        Log($"Error: {errMsg}");
+                        Notification.ShowError($"2-Point Polar Alignment Error: {errMsg}");
+                        hasExecutedBefore = false;
+                        hasRecordedPosition = false;
+                        throw new InvalidOperationException(errMsg);
+                    }
+
+                    Log($"Valid retry detected (Alt: {currentAlt:F2}°, Az: {currentAz:F2}° matches recorded Alt: {recordedAlt:F2}°, Az: {recordedAz:F2}°).");
+                    if (homePosition != null) {
+                        Log($"Automatically slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString})...");
+                        await telescopeMediator.SlewToCoordinatesAsync(homePosition, CancellationToken.None);
+                        Log("Successfully returned to Home Position.");
+                        currentPosition = homePosition;
+                    }
+                }
+            }
+
+            // 1. Mount Slewing (Pre-rotation if requested)
+            if (StartingPoint == StartingPointMode.PreRotateHalfRange) {
+                double offsetDegrees = RotationAmount / 2.0;
+                double offsetHours = offsetDegrees / 15.0;
+                Log($"Pre-rotating RA by {offsetDegrees:F1}° in the opposite direction of {Direction}...");
+
+                double targetRA = currentPosition.RA + (Direction == RotationDirection.East ? -offsetHours : offsetHours);
+                if (targetRA < 0) targetRA += 24.0;
+                if (targetRA >= 24.0) targetRA -= 24.0;
+
+                Coordinates targetCoords = new Coordinates(targetRA, currentPosition.Dec, currentPosition.Epoch, Coordinates.RAType.Hours);
+                await telescopeMediator.SlewToCoordinatesAsync(targetCoords, CancellationToken.None);
+                Log("Pre-rotation completed successfully.");
+            } else {
+                Log("Starting at current/home position.");
+            }
+
+            // Record target Alt/Az position for valid retry check
+            if (Method == RotationMethod.Automatic) {
+                var info = telescopeMediator.GetInfo();
+                recordedAlt = info?.Altitude ?? 0;
+                recordedAz = info?.Azimuth ?? 0;
+                hasRecordedPosition = true;
+                Log($"Recorded target position Alt: {recordedAlt:F2}°, Az: {recordedAz:F2}° for subsequent retry verification.");
+            }
+
+            // 2. Camera Exposure and Plate Solving
+            Log("Capturing starting image and solving...");
+
+            int binVal = 1;
+            if (!string.IsNullOrEmpty(Binning) && Binning.Length >= 1) {
+                int.TryParse(Binning.Substring(0, 1), out binVal);
+            }
+
+            CaptureSequence sequence = new CaptureSequence {
+                ExposureTime = ExposureTime,
+                ImageType = "LIGHT",
+                Gain = Gain,
+                Binning = new BinningMode((short)binVal, (short)binVal),
+                FilterType = new FilterInfo { Name = Filter },
+                Offset = Offset,
+                Enabled = true,
+                TotalExposureCount = 1
+            };
+
+            PlateSolveResult result;
+            if (isSimulation) {
+                Log("[Simulator] Simulating 3s camera exposure and plate solve...");
+                await Task.Delay(3000);
+                var simPosition = telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
+                result = new PlateSolveResult {
+                    Success = true,
+                    Coordinates = new Coordinates(simPosition.RA, simPosition.Dec, simPosition.Epoch, Coordinates.RAType.Hours)
+                };
+            } else {
+                var profile = profileService.ActiveProfile;
+                var plateSolveSettings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+                if (plateSolveSettings == null) {
+                    throw new InvalidOperationException("Could not retrieve active plate solve settings.");
+                }
+
+                IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
+                IPlateSolver blindSolver = plateSolverFactory.GetBlindSolver(plateSolveSettings);
+                ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, blindSolver, imagingMediator, filterWheelMediator);
+
+                CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                    Attempts = 1,
+                    ReattemptDelay = TimeSpan.FromSeconds(2),
+                    FocalLength = profile.TelescopeSettings.FocalLength,
+                    PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
+                    Binning = binVal,
+                    DisableNotifications = true
+                };
+
+                var solveProgress = new Progress<PlateSolveProgress>();
+                var appProgress = new Progress<ApplicationStatus>();
+
+                result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, CancellationToken.None);
+            }
+
+            if (result == null || !result.Success) {
+                Notification.ShowError("2-Point Polar Alignment Error: Initial plate solve failed!");
+                throw new InvalidOperationException("Initial plate solve failed. Ensure exposure settings are correct and the sky is clear.");
+            }
+
+            Log($"Solved initial coordinates successfully: RA {result.Coordinates.RAString}, Dec {result.Coordinates.DecString}");
+            Notification.ShowSuccess("2-Point Polar Alignment: Phase B (Initial Positioning & Verification) completed successfully!");
         }
 
         public IEnumerable<string> Filters {

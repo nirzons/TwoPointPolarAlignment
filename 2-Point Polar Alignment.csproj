@@ -9,7 +9,14 @@
     <UseWPF>true</UseWPF>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <DefaultItemExcludes>$(DefaultItemExcludes);scratch-app\**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="scratch-app\**" />
+    <EmbeddedResource Remove="scratch-app\**" />
+    <None Remove="scratch-app\**" />
+    <Page Remove="scratch-app\**" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="NINA.Plugin" Version="3.0.0.2017-beta" />
     <PackageReference Include="NINA.WPF.Base" Version="3.0.0.2017-beta" />
