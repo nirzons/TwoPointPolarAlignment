@@ -587,6 +587,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     }
                 } catch { }
 
+                currentPosition = telescopeMediator.GetCurrentPosition();
                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
                     Attempts = 1,
                     ReattemptDelay = TimeSpan.FromSeconds(2),
@@ -594,6 +595,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                     Binning = binVal,
                     SearchRadius = searchRadiusVal,
+                    Regions = 5000.0,
+                    MaxObjects = 500,
+                    Coordinates = currentPosition,
                     BlindFailoverEnabled = false,
                     DisableNotifications = true
                 };
@@ -723,6 +727,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     }
                 } catch { }
 
+                currentPosition = telescopeMediator.GetCurrentPosition();
                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
                     Attempts = 1,
                     ReattemptDelay = TimeSpan.FromSeconds(2),
@@ -730,6 +735,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                     Binning = binVal,
                     SearchRadius = searchRadiusVal,
+                    Regions = 5000.0,
+                    MaxObjects = 500,
+                    Coordinates = currentPosition,
                     BlindFailoverEnabled = false,
                     DisableNotifications = true
                 };
