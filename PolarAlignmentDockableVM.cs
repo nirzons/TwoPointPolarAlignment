@@ -6,12 +6,33 @@ using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Model;
 using NINA.Core.Model.Equipment;
 using NINA.Equipment.Equipment.MyCamera;
+using NINA.Core.Utility.Notification;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Windows.Media;
+using System.Windows.Input;
 
 namespace NirZonshine.NINA.TwoPointPolarAlignment {
+
+    public class RelayCommand : ICommand {
+        private readonly Action<object> execute;
+        private readonly Func<object, bool> canExecute;
+
+        public RelayCommand(Action<object> execute, Func<object, bool> canExecute = null) {
+            this.execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            this.canExecute = canExecute;
+        }
+
+        public bool CanExecute(object parameter) => canExecute == null || canExecute(parameter);
+
+        public void Execute(object parameter) => execute(parameter);
+
+        public event EventHandler CanExecuteChanged {
+            add => CommandManager.RequerySuggested += value;
+            remove => CommandManager.RequerySuggested -= value;
+        }
+    }
 
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
     public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer {
@@ -27,6 +48,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private string binning = "1x1";
         private int offset = 0;
         private double telescopeMoveRate = 3.0;
+        private string logs = "[System] Waiting for user interaction...";
+        private ICommand startAlignmentCommand;
 
         private readonly ICameraMediator cameraMediator;
         private readonly ITelescopeMediator telescopeMediator;
@@ -187,6 +210,104 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 telescopeMoveRate = value;
                 RaisePropertyChanged(nameof(TelescopeMoveRate));
             }
+        }
+
+        public string Logs {
+            get => logs;
+            set {
+                logs = value;
+                RaisePropertyChanged(nameof(Logs));
+            }
+        }
+
+        public ICommand StartAlignmentCommand => startAlignmentCommand ??= new RelayCommand(o => StartAlignment());
+
+        public void Log(string message) {
+            Logs += $"\n[{DateTime.Now:HH:mm:ss}] {message}";
+            global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] {message}");
+        }
+
+        public void StartAlignment() {
+            Logs = $"[{DateTime.Now:HH:mm:ss}] [System] Starting alignment sequence...";
+            Log("Initiating Phase A (Pre-flight Checks)...");
+
+            // 1. Verify Camera Connection
+            bool isCameraConnected = IsCameraConnected;
+            if (!isCameraConnected) {
+                Log("Error: Camera is not connected!");
+                Notification.ShowError("2-Point Polar Alignment Error: Camera is not connected!");
+                return;
+            }
+
+            // 2. Verify Mount Connection
+            bool isMountConnected = IsMountConnected;
+            if (!isMountConnected) {
+                Log("Error: Telescope Mount is not connected!");
+                Notification.ShowError("2-Point Polar Alignment Error: Telescope Mount is not connected!");
+                return;
+            }
+
+            // 3. Verify Plate Solver Configuration
+            bool isSolverOk = false;
+            string detectedSolverName = "Unknown";
+            try {
+                if (profileService?.ActiveProfile != null) {
+                    var profileType = profileService.ActiveProfile.GetType();
+                    
+                    var solverSettingsProp = profileType.GetProperty("PlateSolveSettings");
+                    if (solverSettingsProp != null) {
+                        var settingsObj = solverSettingsProp.GetValue(profileService.ActiveProfile);
+                        if (settingsObj != null) {
+                            var solverTypeProp = settingsObj.GetType().GetProperty("PlateSolverType");
+                            if (solverTypeProp != null) {
+                                var solverValue = solverTypeProp.GetValue(settingsObj);
+                                detectedSolverName = solverValue?.ToString() ?? "Unknown";
+
+                                string pathPropName = null;
+                                if (detectedSolverName.Contains("ASTAP", StringComparison.OrdinalIgnoreCase)) {
+                                    pathPropName = "ASTAPLocation";
+                                } else if (detectedSolverName.Contains("PS2", StringComparison.OrdinalIgnoreCase) || detectedSolverName.Contains("PlateSolve2", StringComparison.OrdinalIgnoreCase)) {
+                                    pathPropName = "PS2Location";
+                                } else if (detectedSolverName.Contains("PS3", StringComparison.OrdinalIgnoreCase) || detectedSolverName.Contains("PlateSolve3", StringComparison.OrdinalIgnoreCase)) {
+                                    pathPropName = "PS3Location";
+                                } else if (detectedSolverName.Contains("ASPS", StringComparison.OrdinalIgnoreCase)) {
+                                    pathPropName = "AspsLocation";
+                                }
+
+                                if (!string.IsNullOrEmpty(pathPropName)) {
+                                    var pathProp = settingsObj.GetType().GetProperty(pathPropName);
+                                    if (pathProp != null) {
+                                        string path = pathProp.GetValue(settingsObj) as string;
+                                        if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) {
+                                            isSolverOk = false;
+                                        } else {
+                                            isSolverOk = true;
+                                        }
+                                    } else {
+                                        isSolverOk = true; // Fallback if path property not found
+                                    }
+                                } else {
+                                    isSolverOk = !detectedSolverName.Equals("None", StringComparison.OrdinalIgnoreCase) && !detectedSolverName.Contains("NoSolver");
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    isSolverOk = true; // Fallback
+                }
+            } catch {
+                isSolverOk = true; // Fail-safe
+            }
+
+            if (!isSolverOk) {
+                Log($"Error: Selected Plate Solver ({detectedSolverName}) is unconfigured or not installed!");
+                Notification.ShowError($"2-Point Polar Alignment Error: Selected Plate Solver ({detectedSolverName}) is unconfigured or not installed!");
+                return;
+            }
+
+            Log($"Valid Plate Solver found: {detectedSolverName}");
+            Log("Phase A (Pre-flight Checks) completed successfully!");
+            Notification.ShowSuccess("2-Point Polar Alignment: Pre-flight checks passed successfully!");
         }
 
         public IEnumerable<string> Filters {

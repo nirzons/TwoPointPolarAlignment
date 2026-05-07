@@ -145,6 +145,46 @@
                             <TextBlock Text="Camera Gain:" VerticalAlignment="Center" Foreground="#DDD" />
                             <TextBox Grid.Column="1" Text="{Binding Gain, UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" VerticalContentAlignment="Center" Padding="4,2" />
                         </Grid>
+
+                        <!-- Filter Selection -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Filter:" VerticalAlignment="Center" Foreground="#DDD" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding Filters}" SelectedItem="{Binding Filter}" Margin="4,0,0,0" Height="26" />
+                        </Grid>
+
+                        <!-- Binning Selection -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Binning:" VerticalAlignment="Center" Foreground="#DDD" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding Source={StaticResource BinningValues}}" SelectedItem="{Binding Binning}" Margin="4,0,0,0" Height="26" />
+                        </Grid>
+
+                        <!-- Offset -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Offset:" VerticalAlignment="Center" Foreground="#DDD" />
+                            <TextBox Grid.Column="1" Text="{Binding Offset, UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" VerticalContentAlignment="Center" Padding="4,2" />
+                        </Grid>
+
+                        <!-- Telescope Move Rate -->
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Move Rate (°/s):" VerticalAlignment="Center" Foreground="#DDD" />
+                            <TextBox Grid.Column="1" Text="{Binding TelescopeMoveRate, UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" VerticalContentAlignment="Center" Padding="4,2" />
+                        </Grid>
                     </StackPanel>
                 </Grid>
             </StackPanel>
@@ -164,6 +204,10 @@
                 <TextBlock Text=", " Foreground="Gray" />
                 <TextBlock Text="{Binding ExposureTime}" Foreground="#9AFF9A" />
                 <TextBlock Text="s" Foreground="Gray" />
+                <TextBlock Text=", " Foreground="Gray" />
+                <TextBlock Text="{Binding Filter}" Foreground="#FF72BD" />
+                <TextBlock Text=", Bin " Foreground="Gray" />
+                <TextBlock Text="{Binding Binning}" Foreground="#72BDFF" />
                 <TextBlock Text="]" Foreground="Gray" />
             </StackPanel>
         </Grid>
@@ -379,13 +423,13 @@
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="Alignment Logs" FontSize="10" FontWeight="Bold" Foreground="Gray" Margin="0,0,0,4" />
-                                    <TextBlock Text="[System] Waiting for user interaction..." FontSize="10" Foreground="#9AFF9A" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Logs}" FontSize="10" Foreground="#9AFF9A" TextWrapping="Wrap" />
                                 </StackPanel>
                             </ScrollViewer>
                         </Border>
 
                         <!-- Main Play Button -->
-                        <Button Grid.Row="3" Content="Start Alignment Sequence" Height="34" IsEnabled="{Binding CanRun}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand">
+                        <Button Grid.Row="3" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanRun}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand">
                             <Button.Resources>
                                 <Style TargetType="Border">
                                     <Setter Property="CornerRadius" Value="6" />
