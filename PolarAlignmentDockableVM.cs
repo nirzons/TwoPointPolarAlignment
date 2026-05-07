@@ -416,32 +416,39 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     if (currentHA < 0) currentHA += 24.0;
                     if (currentHA >= 24.0) currentHA -= 24.0;
 
-                    double haDiff = Math.Abs(currentHA - recordedHA);
-                    if (haDiff > 12.0) haDiff = 24.0 - haDiff;
-
-                    double raDiff = Math.Abs(currentRA - recordedRA);
-                    if (raDiff > 12.0) raDiff = 24.0 - raDiff;
-
-                    double toleranceHours = 0.25 / 15.0;
-                    bool isValidRetry = hasRecordedPosition && 
-                                        Math.Abs(currentDec - recordedDec) < 0.25 && 
-                                        (haDiff < toleranceHours || raDiff < toleranceHours);
-
-                    if (!isValidRetry) {
-                        string errMsg = "Telescope has been moved from its recorded position. Please move the telescope to the home position and start again.";
-                        Log($"Error: {errMsg}");
-                        hasExecutedBefore = false;
+                    bool isNearHome = Math.Abs(Math.Abs(currentDec) - 90.0) < 1.0;
+                    if (isNearHome) {
+                        homePosition = new Coordinates(currentRA, currentDec, currentPosition?.Epoch ?? Epoch.JNOW, Coordinates.RAType.Hours);
                         hasRecordedPosition = false;
-                        throw new InvalidOperationException(errMsg);
-                    }
+                        Log($"Telescope returned to Home position (RA: {homePosition.RAString}, Dec: {homePosition.DecString}). Starting a fresh alignment run.");
+                    } else {
+                        double haDiff = Math.Abs(currentHA - recordedHA);
+                        if (haDiff > 12.0) haDiff = 24.0 - haDiff;
 
-                    Log($"Valid retry detected (Dec: {currentDec:F2}°, RA: {currentRA:F4}h, HA: {currentHA:F2}h matches recorded Dec: {recordedDec:F2}°, RA: {recordedRA:F4}h, HA: {recordedHA:F4}h).");
-                    if (homePosition != null) {
-                        Log($"Automatically slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString})...");
-                        await telescopeMediator.SlewToCoordinatesAsync(homePosition, CancellationToken.None);
-                        try { telescopeMediator.SetTrackingEnabled(false); } catch { }
-                        Log("Successfully returned to Home Position.");
-                        currentPosition = homePosition;
+                        double raDiff = Math.Abs(currentRA - recordedRA);
+                        if (raDiff > 12.0) raDiff = 24.0 - raDiff;
+
+                        double toleranceHours = 0.25 / 15.0;
+                        bool isValidRetry = hasRecordedPosition && 
+                                            Math.Abs(currentDec - recordedDec) < 0.25 && 
+                                            (haDiff < toleranceHours || raDiff < toleranceHours);
+
+                        if (!isValidRetry) {
+                            string errMsg = "Telescope has been moved from its recorded position. Please move the telescope to the home position and start again.";
+                            Log($"Error: {errMsg}");
+                            hasExecutedBefore = false;
+                            hasRecordedPosition = false;
+                            throw new InvalidOperationException(errMsg);
+                        }
+
+                        Log($"Valid retry detected (Dec: {currentDec:F2}°, RA: {currentRA:F4}h, HA: {currentHA:F2}h matches recorded Dec: {recordedDec:F2}°, RA: {recordedRA:F4}h, HA: {recordedHA:F4}h).");
+                        if (homePosition != null) {
+                            Log($"Automatically slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString})...");
+                            await telescopeMediator.SlewToCoordinatesAsync(homePosition, CancellationToken.None);
+                            try { telescopeMediator.SetTrackingEnabled(false); } catch { }
+                            Log("Successfully returned to Home Position.");
+                            currentPosition = homePosition;
+                        }
                     }
                 }
             }
@@ -570,8 +577,15 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
 
                 IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
-                IPlateSolver blindSolver = plateSolverFactory.GetBlindSolver(plateSolveSettings);
-                ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, blindSolver, imagingMediator, filterWheelMediator);
+                ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, null, imagingMediator, filterWheelMediator);
+
+                double searchRadiusVal = 15.0;
+                try {
+                    var radiusProp = plateSolveSettings.GetType().GetProperty("SearchRadius");
+                    if (radiusProp != null) {
+                        searchRadiusVal = Convert.ToDouble(radiusProp.GetValue(plateSolveSettings) ?? 15.0);
+                    }
+                } catch { }
 
                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
                     Attempts = 1,
@@ -579,17 +593,29 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     FocalLength = profile.TelescopeSettings.FocalLength,
                     PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                     Binning = binVal,
+                    SearchRadius = searchRadiusVal,
+                    BlindFailoverEnabled = false,
                     DisableNotifications = true
                 };
 
-                var solveProgress = new Progress<PlateSolveProgress>();
+                var solveProgress = new Progress<PlateSolveProgress>(p => {
+                    if (p.Thumbnail != null) {
+                        System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                            LastFrame = p.Thumbnail;
+                        });
+                    }
+                });
                 var appProgress = new Progress<ApplicationStatus>();
 
-                result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, CancellationToken.None);
+                try {
+                    result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, CancellationToken.None);
+                } catch (Exception ex) {
+                    global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Internal solve error: {ex.Message}");
+                    throw new InvalidOperationException("Initial plate solve failed. Ensure exposure settings are correct, the lens cap is off, and stars are visible.");
+                }
             }
 
             if (result == null || !result.Success) {
-                Notification.ShowError("2-Point Polar Alignment Error: Initial plate solve failed!");
                 throw new InvalidOperationException("Initial plate solve failed. Ensure exposure settings are correct and the sky is clear.");
             }
 
@@ -687,8 +713,15 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
 
                 IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
-                IPlateSolver blindSolver = plateSolverFactory.GetBlindSolver(plateSolveSettings);
-                ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, blindSolver, imagingMediator, filterWheelMediator);
+                ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, null, imagingMediator, filterWheelMediator);
+
+                double searchRadiusVal = 15.0;
+                try {
+                    var radiusProp = plateSolveSettings.GetType().GetProperty("SearchRadius");
+                    if (radiusProp != null) {
+                        searchRadiusVal = Convert.ToDouble(radiusProp.GetValue(plateSolveSettings) ?? 15.0);
+                    }
+                } catch { }
 
                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
                     Attempts = 1,
@@ -696,17 +729,29 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     FocalLength = profile.TelescopeSettings.FocalLength,
                     PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                     Binning = binVal,
+                    SearchRadius = searchRadiusVal,
+                    BlindFailoverEnabled = false,
                     DisableNotifications = true
                 };
 
-                var solveProgress = new Progress<PlateSolveProgress>();
+                var solveProgress = new Progress<PlateSolveProgress>(p => {
+                    if (p.Thumbnail != null) {
+                        System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                            LastFrame = p.Thumbnail;
+                        });
+                    }
+                });
                 var appProgress = new Progress<ApplicationStatus>();
 
-                result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, CancellationToken.None);
+                try {
+                    result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, CancellationToken.None);
+                } catch (Exception ex) {
+                    global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Internal solve error: {ex.Message}");
+                    throw new InvalidOperationException("Second plate solve failed. Ensure exposure settings are correct, the lens cap is off, and stars are visible.");
+                }
             }
 
             if (result == null || !result.Success) {
-                Notification.ShowError("2-Point Polar Alignment Error: Second plate solve failed!");
                 throw new InvalidOperationException("Second plate solve failed. Ensure exposure settings are correct and the sky is clear.");
             }
 
