@@ -73,6 +73,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private ICommand startAlignmentCommand;
         private string azimuthError = "--' --\"";
         private string altitudeError = "--' --\"";
+        private double totalErrorValue = 0.0;
+        private string totalError = "--' --\"";
+        private Brush totalErrorColor = Brushes.LightCoral;
+        private string azimuthInstruction = "Waiting...";
+        private string altitudeInstruction = "Waiting...";
+        private string totalErrorRating = "Waiting...";
         private bool isRunning = false;
         private Vector3D calculatedPolarAxis;
         private Vector3D measurement2Vector;
@@ -275,6 +281,54 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 altitudeError = value;
                 RaisePropertyChanged(nameof(AltitudeError));
+            }
+        }
+
+        public double TotalErrorValue {
+            get => totalErrorValue;
+            set {
+                totalErrorValue = value;
+                RaisePropertyChanged(nameof(TotalErrorValue));
+            }
+        }
+
+        public string TotalError {
+            get => totalError;
+            set {
+                totalError = value;
+                RaisePropertyChanged(nameof(TotalError));
+            }
+        }
+
+        public Brush TotalErrorColor {
+            get => totalErrorColor;
+            set {
+                totalErrorColor = value;
+                RaisePropertyChanged(nameof(TotalErrorColor));
+            }
+        }
+
+        public string AzimuthInstruction {
+            get => azimuthInstruction;
+            set {
+                azimuthInstruction = value;
+                RaisePropertyChanged(nameof(AzimuthInstruction));
+            }
+        }
+
+        public string AltitudeInstruction {
+            get => altitudeInstruction;
+            set {
+                altitudeInstruction = value;
+                RaisePropertyChanged(nameof(AltitudeInstruction));
+            }
+        }
+
+        public string TotalErrorRating {
+            get => totalErrorRating;
+            set {
+                totalErrorRating = value;
+                RaisePropertyChanged(nameof(TotalErrorRating));
             }
         }
 
@@ -1105,7 +1159,56 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             AltitudeError = FormatError(altErrorArcmin);
             AzimuthError = FormatError(azErrorArcmin);
 
-            Log($"Calculated Alignment Errors: Alt {AltitudeError}, Az {AzimuthError} (Alt: {altErrorArcmin:F1}', Az: {azErrorArcmin:F1}')");
+            // Calculate Total Error (Euclidean norm)
+            TotalErrorValue = Math.Sqrt(altErrorArcmin * altErrorArcmin + azErrorArcmin * azErrorArcmin);
+            TotalError = FormatTotalError(TotalErrorValue);
+
+            // Derive directional instructions and ratings
+            if (azErrorArcmin > 0) {
+                AzimuthInstruction = "← Move Left / West";
+            } else if (azErrorArcmin < 0) {
+                AzimuthInstruction = "Move Right / East →";
+            } else {
+                AzimuthInstruction = "Aligned";
+            }
+
+            if (altErrorArcmin > 0) {
+                AltitudeInstruction = "Move Down ↓";
+            } else if (altErrorArcmin < 0) {
+                AltitudeInstruction = "Move Up ↑";
+            } else {
+                AltitudeInstruction = "Aligned";
+            }
+
+            SolidColorBrush brush;
+            if (TotalErrorValue <= 1.0) {
+                TotalErrorRating = "✨ Excellent Alignment";
+                brush = new SolidColorBrush(Color.FromRgb(0x00, 0xFF, 0x7F)); // SpringGreen
+            } else if (TotalErrorValue <= 3.0) {
+                TotalErrorRating = "🟢 Good Alignment";
+                brush = new SolidColorBrush(Color.FromRgb(0x98, 0xFB, 0x98)); // PaleGreen
+            } else if (TotalErrorValue <= 10.0) {
+                TotalErrorRating = "🟡 Fair Alignment";
+                brush = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)); // Gold
+            } else {
+                TotalErrorRating = "🔴 Poor Alignment";
+                brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x4D)); // Light Red
+            }
+            brush.Freeze();
+            TotalErrorColor = brush;
+
+            Log($"Calculated Alignment Errors: Alt {AltitudeError}, Az {AzimuthError} (Alt: {altErrorArcmin:F1}', Az: {azErrorArcmin:F1}'), Total: {TotalError} ({TotalErrorValue:F1}')");
+        }
+
+        private string FormatTotalError(double errorArcmin) {
+            double absMin = Math.Abs(errorArcmin);
+            int minutes = (int)Math.Truncate(absMin);
+            int seconds = (int)Math.Round((absMin - minutes) * 60.0);
+            if (seconds >= 60) {
+                minutes += 1;
+                seconds -= 60;
+            }
+            return $"{minutes:D2}' {seconds:D2}\"";
         }
 
         private string FormatError(double errorArcmin) {
