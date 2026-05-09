@@ -79,6 +79,28 @@
                     </Grid>
                 </Border>
 
+                <!-- Special Reversed Flow Indicator Badge -->
+                <Border CornerRadius="4" Background="#1D3A2A" BorderThickness="1" BorderBrush="#22C55E" Padding="10,6" Margin="0,0,0,6">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsReversedFlowActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="🔄" Foreground="#22C55E" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="Reversed Flow Active - Running internally in opposite direction from current position." Foreground="#4ADE80" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
                 <!-- Equipment Connection Alert Messages -->
                 <Border CornerRadius="4" Background="#3A1A1A" BorderThickness="1" BorderBrush="#FF4C4C" Padding="10,6" Margin="0,0,0,6">
                     <Border.Style>
@@ -165,9 +187,9 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
@@ -179,9 +201,15 @@
                             </StackPanel>
 
                             <!-- Gain -->
-                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="4,0,0,6">
+                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Gain" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding Gain, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                            </StackPanel>
+
+                            <!-- Binning Selection -->
+                            <StackPanel Grid.Row="0" Grid.Column="2" Margin="4,0,0,6">
+                                <TextBlock Text="Binning" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Source={StaticResource BinningValues}}" SelectedItem="{Binding Binning}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
                             <!-- Rotation Amount -->
@@ -191,45 +219,45 @@
                             </StackPanel>
 
                             <!-- Rotation Direction -->
-                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="4,0,0,6">
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Direction" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Source={StaticResource RotationDirectionValues}}" SelectedItem="{Binding Direction}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
                             <!-- Rotation Method -->
-                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,4,6">
+                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="4,0,0,6">
                                 <TextBlock Text="Method" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Source={StaticResource RotationMethodValues}}" SelectedItem="{Binding Method}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
                             <!-- Starting Point Mode -->
-                            <StackPanel Grid.Row="2" Grid.Column="1" Margin="4,0,0,6">
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Starting Point" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Source={StaticResource StartingPointModeValues}}" SelectedItem="{Binding StartingPoint}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
                             <!-- Filter Selection -->
-                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
+                            <StackPanel Grid.Row="2" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Filter" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Filters}" SelectedItem="{Binding Filter}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
                             </StackPanel>
 
-                            <!-- Binning Selection -->
-                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,0,6">
-                                <TextBlock Text="Binning" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <ComboBox ItemsSource="{Binding Source={StaticResource BinningValues}}" SelectedItem="{Binding Binning}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
-                            </StackPanel>
-
                             <!-- Offset -->
-                            <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,4,0">
+                            <StackPanel Grid.Row="2" Grid.Column="2" Margin="4,0,0,6">
                                 <TextBlock Text="Offset" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding Offset, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
 
                             <!-- Telescope Move Rate -->
-                            <StackPanel Grid.Row="4" Grid.Column="1" Margin="4,0,0,0">
+                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,0">
                                 <TextBlock Text="Telescope Move Rate (°/s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding TelescopeMoveRate, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                            </StackPanel>
+
+                            <!-- Plate Solve Retries -->
+                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,0">
+                                <TextBlock Text="Plate Solve Retries" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
                         </Grid>
 
@@ -243,14 +271,38 @@
                             </ScrollViewer>
                         </Border>
 
-                        <!-- Main Play Button -->
-                        <Button Grid.Row="3" Content="{Binding ButtonContent}" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanRun}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand">
-                            <Button.Resources>
-                                <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="6" />
-                                </Style>
-                            </Button.Resources>
-                        </Button>
+                        <!-- Buttons Row -->
+                        <Grid Grid.Row="3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <!-- Start Button -->
+                            <Button Grid.Column="0" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanStart}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="0,0,4,0">
+                                <Button.Resources>
+                                    <Style TargetType="Border">
+                                        <Setter Property="CornerRadius" Value="6" />
+                                    </Style>
+                                </Button.Resources>
+                            </Button>
+                            <!-- Stop Button -->
+                            <Button Grid.Column="1" Content="Stop" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="4,0,4,0">
+                                <Button.Resources>
+                                    <Style TargetType="Border">
+                                        <Setter Property="CornerRadius" Value="6" />
+                                    </Style>
+                                </Button.Resources>
+                            </Button>
+                            <!-- Home Button -->
+                            <Button Grid.Column="2" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#22C55E" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="4,0,0,0">
+                                <Button.Resources>
+                                    <Style TargetType="Border">
+                                        <Setter Property="CornerRadius" Value="6" />
+                                    </Style>
+                                </Button.Resources>
+                            </Button>
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>
@@ -286,7 +338,7 @@
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="TOTAL ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding TotalError}" FontSize="28" FontWeight="Bold" Foreground="{Binding TotalErrorColor}" Margin="0,5,0,5" HorizontalAlignment="Center" />
-                        <TextBlock Text="{Binding TotalErrorRating}" FontSize="13" FontWeight="SemiBold" Foreground="{Binding TotalErrorColor}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding TotalErrorRating}" FontSize="13" FontWeight="SemiBold" Foreground="{Binding TotalErrorRatingColor}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
             </Grid>
