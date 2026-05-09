@@ -87,6 +87,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private System.Threading.CancellationTokenSource alignmentCts;
         private Vector3D calculatedPolarAxis;
         private Vector3D measurement2Vector;
+        private Vector3D initialPolarAxis;
         private double simTimeFactor = -1.0;
         private bool blinkToggle = false;
 
@@ -110,6 +111,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private double angle1;
         private Coordinates coordinates2;
         private double angle2;
+        private double lstMeasurement2;
 
         [ImportingConstructor]
         public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator, IPlateSolverFactory plateSolverFactory, IImagingMediator imagingMediator, IFilterWheelMediator filterWheelMediator) : base(profileService) {
@@ -1053,6 +1055,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
             coordinates2 = result.Coordinates;
             angle2 = result.PositionAngle;
+            lstMeasurement2 = telescopeMediator.GetInfo()?.SiderealTime ?? 0.0;
+            if (lstMeasurement2 == 0.0) lstMeasurement2 = coordinates2.RA;
 
             Log($"Solved second coordinates successfully: RA {coordinates2.RAString}, Dec {coordinates2.DecString}, Orientation Angle: {angle2:F2}°");
 
@@ -1279,50 +1283,70 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         private void CalculateErrors(Coordinates c1, double a1, Coordinates c2, double a2, bool isInitial = true) {
             Vector3D v1 = Vector3D.FromEquatorial(c1);
-            Vector3D v2 = Vector3D.FromEquatorial(c2);
+            Vector3D v2;
 
             if (isInitial) {
+                v2 = Vector3D.FromEquatorial(c2);
                 measurement2Vector = v2;
 
-                // Rotation angle omega in radians (angle2 - angle1)
-                double omegaRad = (a2 - a1) * Math.PI / 180.0;
+                // Robust 3D Rotation Matrix approach to find exact center of rotation (Mount's Polar Axis)
+                // Frame 1
+                Vector3D N1 = (new Vector3D(0, 0, 1) - v1.Z * v1).Normalize();
+                Vector3D E1 = Vector3D.Cross(new Vector3D(0, 0, 1), v1).Normalize();
+                double a1Rad = a1 * Math.PI / 180.0;
+                Vector3D Y1 = (Math.Cos(a1Rad) * N1 + Math.Sin(a1Rad) * E1).Normalize();
+                Vector3D X1 = Vector3D.Cross(Y1, v1).Normalize();
 
-                // If rotation angle is extremely small, handle safely
-                if (Math.Abs(omegaRad) < 1e-4) {
-                    omegaRad = 1e-4 * Math.Sign(omegaRad == 0 ? 1 : omegaRad);
+                // Frame 2
+                Vector3D N2 = (new Vector3D(0, 0, 1) - v2.Z * v2).Normalize();
+                Vector3D E2 = Vector3D.Cross(new Vector3D(0, 0, 1), v2).Normalize();
+                double a2Rad = a2 * Math.PI / 180.0;
+                Vector3D Y2 = (Math.Cos(a2Rad) * N2 + Math.Sin(a2Rad) * E2).Normalize();
+                Vector3D X2 = Vector3D.Cross(Y2, v2).Normalize();
+
+                // Rotation Matrix R = Frame2 * Frame1^T
+                double r32 = X2.Z * X1.Y + Y2.Z * Y1.Y + v2.Z * v1.Y;
+                double r23 = X2.Y * X1.Z + Y2.Y * Y1.Z + v2.Y * v1.Z;
+                
+                double r13 = X2.X * X1.Z + Y2.X * Y1.Z + v2.X * v1.Z;
+                double r31 = X2.Z * X1.X + Y2.Z * Y1.X + v2.Z * v1.X;
+                
+                double r21 = X2.Y * X1.X + Y2.Y * Y1.X + v2.Y * v1.X;
+                double r12 = X2.X * X1.Y + Y2.X * Y1.Y + v2.X * v1.Y;
+
+                // The rotation axis is the eigenvector associated with eigenvalue 1, proportional to the skew-symmetric part
+                Vector3D P = new Vector3D(r32 - r23, r13 - r31, r21 - r12).Normalize();
+
+                // Ensure it points to the correct hemisphere (same as celestial pole we are aligning to)
+                double siteLatitude = GetLatitude();
+                if (siteLatitude >= 0 && P.Z < 0) {
+                    P = new Vector3D(-P.X, -P.Y, -P.Z);
+                } else if (siteLatitude < 0 && P.Z > 0) {
+                    P = new Vector3D(-P.X, -P.Y, -P.Z);
                 }
 
-                // Angle theta_12 between v1 and v2
-                double cosTheta12 = Vector3D.Dot(v1, v2);
-                cosTheta12 = Math.Clamp(cosTheta12, -1.0, 1.0);
-                double theta12 = Math.Acos(cosTheta12);
-
-                // sin(rho) = sin(theta_12 / 2) / sin(omega / 2)
-                double sinHalfOmega = Math.Sin(omegaRad / 2.0);
-                if (Math.Abs(sinHalfOmega) < 1e-9) sinHalfOmega = 1e-9 * Math.Sign(sinHalfOmega == 0 ? 1 : sinHalfOmega);
-
-                double sinRho = Math.Sin(theta12 / 2.0) / sinHalfOmega;
-                sinRho = Math.Clamp(sinRho, -1.0, 1.0);
-                double cosRho = Math.Sqrt(1.0 - sinRho * sinRho);
-
-                // Normalized bisector and perpendicular
-                Vector3D u_b = (v1 + v2).Normalize();
-                Vector3D u_p = Vector3D.Cross(v1, v2).Normalize();
-
-                // Coefficients
-                double cosHalfTheta = Math.Cos(theta12 / 2.0);
-                if (Math.Abs(cosHalfTheta) < 1e-9) cosHalfTheta = 1e-9;
-                double c1_coeff = cosRho / cosHalfTheta;
-
-                double sinTheta12 = Math.Sin(theta12);
-                if (Math.Abs(sinTheta12) < 1e-9) sinTheta12 = 1e-9;
-                double c2_coeff = (Math.Sin(omegaRad) * sinRho * sinRho) / sinTheta12;
-
-                // Mount's polar axis unit vector
-                calculatedPolarAxis = (c1_coeff * u_b + c2_coeff * u_p).Normalize();
+                calculatedPolarAxis = P;
+                initialPolarAxis = calculatedPolarAxis;
             } else {
-                // Live adjustment update
-                calculatedPolarAxis = (v2 - measurement2Vector + calculatedPolarAxis).Normalize();
+                // Correct live RA for earth's rotation since measurement 2
+                double lstLive = 0.0;
+                try { lstLive = telescopeMediator?.GetInfo()?.SiderealTime ?? 0.0; } catch { }
+                if (lstLive == 0.0) lstLive = c2.RA; // Fallback
+
+                double deltaLst = lstLive - lstMeasurement2;
+                // Handle wrap-around
+                if (deltaLst > 12.0) deltaLst -= 24.0;
+                if (deltaLst < -12.0) deltaLst += 24.0;
+
+                double correctedRa = c2.RA - deltaLst;
+                if (correctedRa < 0) correctedRa += 24.0;
+                if (correctedRa >= 24.0) correctedRa -= 24.0;
+
+                Coordinates correctedC2 = new Coordinates(correctedRa, c2.Dec, c2.Epoch, Coordinates.RAType.Hours);
+                v2 = Vector3D.FromEquatorial(correctedC2);
+
+                // Live adjustment update (non-accumulative relative to initial polar axis)
+                calculatedPolarAxis = (v2 - measurement2Vector + initialPolarAxis).Normalize();
             }
 
             // Convert calculated polar axis to Dec and RA
@@ -1397,10 +1421,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             TotalError = FormatTotalError(TotalErrorValue);
 
             // Derive directional instructions and ratings
+            bool isNorthern = latitude >= 0;
             if (azErrorArcmin > 0) {
-                AzimuthInstruction = "← Move Left / West";
+                AzimuthInstruction = isNorthern ? "← Move Left / West" : "Move Right / East →";
             } else if (azErrorArcmin < 0) {
-                AzimuthInstruction = "Move Right / East →";
+                AzimuthInstruction = isNorthern ? "Move Right / East →" : "← Move Left / West";
             } else {
                 AzimuthInstruction = "Aligned";
             }
@@ -1445,25 +1470,37 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         private string FormatTotalError(double errorArcmin) {
             double absMin = Math.Abs(errorArcmin);
-            int minutes = (int)Math.Truncate(absMin);
-            int seconds = (int)Math.Round((absMin - minutes) * 60.0);
+            int totalMinutes = (int)Math.Truncate(absMin);
+            int seconds = (int)Math.Round((absMin - totalMinutes) * 60.0);
             if (seconds >= 60) {
-                minutes += 1;
+                totalMinutes += 1;
                 seconds -= 60;
+            }
+            int degrees = totalMinutes / 60;
+            int minutes = totalMinutes % 60;
+
+            if (degrees > 0) {
+                return $"{degrees:D2}° {minutes:D2}' {seconds:D2}\"";
             }
             return $"{minutes:D2}' {seconds:D2}\"";
         }
 
         private string FormatError(double errorArcmin) {
             double absMin = Math.Abs(errorArcmin);
-            int minutes = (int)Math.Truncate(absMin);
-            int seconds = (int)Math.Round((absMin - minutes) * 60.0);
+            int totalMinutes = (int)Math.Truncate(absMin);
+            int seconds = (int)Math.Round((absMin - totalMinutes) * 60.0);
             if (seconds >= 60) {
-                minutes += 1;
+                totalMinutes += 1;
                 seconds -= 60;
             }
+            int degrees = totalMinutes / 60;
+            int minutes = totalMinutes % 60;
+
             string sign = errorArcmin < 0 ? "-" : "+";
-            return $"{sign}{minutes}' {seconds:D2}\"";
+            if (degrees > 0) {
+                return $"{sign}{degrees:D2}° {minutes:D2}' {seconds:D2}\"";
+            }
+            return $"{sign}{minutes:D2}' {seconds:D2}\"";
         }
 
         public struct Vector3D {
