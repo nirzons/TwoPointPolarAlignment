@@ -169,13 +169,14 @@
 
                 <!-- Column 1: Control & Settings Center -->
                 <Border Grid.Column="1" CornerRadius="8" Background="{DynamicResource MahApps.Brushes.Subtle}" Padding="12" BorderThickness="1" BorderBrush="#2A2A30">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" /> <!-- Config Header -->
-                            <RowDefinition Height="Auto" /> <!-- Inputs Grid -->
-                            <RowDefinition Height="*" />    <!-- Logs ScrollViewer -->
-                            <RowDefinition Height="Auto" /> <!-- Button -->
-                        </Grid.RowDefinitions>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" /> <!-- Config Header -->
+                                <RowDefinition Height="Auto" /> <!-- Inputs Grid -->
+                                <RowDefinition Height="Auto" /> <!-- Button -->
+                                <RowDefinition Height="*" MinHeight="100" />    <!-- Logs ScrollViewer -->
+                            </Grid.RowDefinitions>
 
                         <!-- Config Header -->
                         <TextBlock Grid.Row="0" Text="Alignment Settings" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" Margin="0,0,0,8" />
@@ -261,25 +262,18 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- Log Console -->
-                        <Border Grid.Row="2" CornerRadius="4" Background="#111115" BorderThickness="1" BorderBrush="#222228" Padding="8" Margin="0,4,0,8">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="Alignment Logs" FontSize="10" FontWeight="Bold" Foreground="Gray" Margin="0,0,0,4" />
-                                    <TextBlock Text="{Binding Logs}" FontSize="10" Foreground="#9AFF9A" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Border>
-
                         <!-- Buttons Row -->
-                        <Grid Grid.Row="3">
+                        <Grid Grid.Row="2" Margin="0,4,0,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <!-- Start Button -->
-                            <Button Grid.Column="0" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanStart}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="0,0,4,0">
+                            <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanStart}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="0,0,0,6">
                                 <Button.Resources>
                                     <Style TargetType="Border">
                                         <Setter Property="CornerRadius" Value="6" />
@@ -287,7 +281,7 @@
                                 </Button.Resources>
                             </Button>
                             <!-- Stop Button -->
-                            <Button Grid.Column="1" Content="Stop" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="4,0,4,0">
+                            <Button Grid.Row="1" Grid.Column="0" Content="Stop" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="0,0,3,0">
                                 <Button.Resources>
                                     <Style TargetType="Border">
                                         <Setter Property="CornerRadius" Value="6" />
@@ -295,7 +289,7 @@
                                 </Button.Resources>
                             </Button>
                             <!-- Home Button -->
-                            <Button Grid.Column="2" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#22C55E" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="4,0,0,0">
+                            <Button Grid.Row="1" Grid.Column="1" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#22C55E" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="3,0,0,0">
                                 <Button.Resources>
                                     <Style TargetType="Border">
                                         <Setter Property="CornerRadius" Value="6" />
@@ -303,7 +297,18 @@
                                 </Button.Resources>
                             </Button>
                         </Grid>
+
+                        <!-- Log Console -->
+                        <Border Grid.Row="3" CornerRadius="4" Background="#111115" BorderThickness="1" BorderBrush="#222228" Padding="8" Margin="0,4,0,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="Alignment Logs" FontSize="10" FontWeight="Bold" Foreground="Gray" Margin="0,0,0,4" />
+                                    <TextBlock Text="{Binding Logs}" FontSize="10" Foreground="#9AFF9A" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
                     </Grid>
+                    </ScrollViewer>
                 </Border>
             </Grid>
 
@@ -319,8 +324,8 @@
                 <Border Grid.Column="0" CornerRadius="8" Background="#1A1A20" BorderThickness="1" BorderBrush="#2D2D35" Padding="15" Margin="0,0,10,0">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="AZIMUTH ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding AzimuthError}" FontSize="28" FontWeight="Bold" Foreground="#72BDFF" Margin="0,5,0,5" HorizontalAlignment="Center" />
-                        <TextBlock Text="{Binding AzimuthInstruction}" FontSize="13" FontWeight="SemiBold" Foreground="#72BDFF" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding AzimuthError}" FontSize="16" FontWeight="SemiBold" Foreground="#72BDFF" Margin="0,5,0,5" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding AzimuthInstruction}" FontSize="24" FontWeight="Bold" Foreground="#72BDFF" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
 
@@ -328,8 +333,8 @@
                 <Border Grid.Column="1" CornerRadius="8" Background="#1A1A20" BorderThickness="1" BorderBrush="#2D2D35" Padding="15" Margin="0,0,10,0">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="ALTITUDE ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding AltitudeError}" FontSize="28" FontWeight="Bold" Foreground="#FFE79A" Margin="0,5,0,5" HorizontalAlignment="Center" />
-                        <TextBlock Text="{Binding AltitudeInstruction}" FontSize="13" FontWeight="SemiBold" Foreground="#FFE79A" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding AltitudeError}" FontSize="16" FontWeight="SemiBold" Foreground="#FFE79A" Margin="0,5,0,5" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding AltitudeInstruction}" FontSize="24" FontWeight="Bold" Foreground="#FFE79A" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
 
@@ -337,8 +342,8 @@
                 <Border Grid.Column="2" CornerRadius="8" Background="#1A1A20" BorderThickness="1" BorderBrush="#2D2D35" Padding="15">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="TOTAL ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding TotalError}" FontSize="28" FontWeight="Bold" Foreground="{Binding TotalErrorColor}" Margin="0,5,0,5" HorizontalAlignment="Center" />
-                        <TextBlock Text="{Binding TotalErrorRating}" FontSize="13" FontWeight="SemiBold" Foreground="{Binding TotalErrorRatingColor}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding TotalError}" FontSize="24" FontWeight="Bold" Foreground="{Binding TotalErrorColor}" Margin="0,5,0,5" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding TotalErrorRating}" FontSize="16" FontWeight="SemiBold" Foreground="{Binding TotalErrorRatingColor}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
             </Grid>

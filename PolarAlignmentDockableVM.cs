@@ -69,7 +69,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private string binning = "1x1";
         private int offset = 0;
         private double telescopeMoveRate = 3.0;
-        private int plateSolveRetries = 3;
+        private int plateSolveRetries = 5;
         private string logs = "[System] Waiting for user interaction...";
         private ICommand startAlignmentCommand;
         private string azimuthError = "--' --\"";
@@ -145,8 +145,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             // 3. Top Star (12 o'clock)
             group.Children.Add(Geometry.Parse("M12,0.5 L13.2,2.8 L15.8,2.8 L13.7,4.3 L14.5,6.6 L12,5.1 L9.5,6.6 L10.3,4.3 L8.2,2.8 L10.8,2.8 Z"));
             
+            group.Freeze(); // Crucial for cross-thread WPF access
             ImageGeometry = group;
             LoadSettings();
+            
+            if (profileService != null) {
+                profileService.ProfileChanged += ProfileService_ProfileChanged;
+            }
         }
 
         public override bool IsTool => true;
@@ -156,6 +161,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         public bool IsMountConnected => telescopeMediator?.GetInfo()?.Connected ?? false;
 
         public bool CanRun => IsCameraConnected && IsMountConnected;
+
+        private void ProfileService_ProfileChanged(object sender, EventArgs e) {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                LoadSettings();
+            });
+        }
 
         private void StatusTimer_Tick(object sender, EventArgs e) {
             var currentCamera = IsCameraConnected;
@@ -1423,9 +1434,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             // Derive directional instructions and ratings
             bool isNorthern = latitude >= 0;
             if (azErrorArcmin > 0) {
-                AzimuthInstruction = isNorthern ? "← Move Left / West" : "Move Right / East →";
+                AzimuthInstruction = isNorthern ? "← Move Left" : "Move Right →";
             } else if (azErrorArcmin < 0) {
-                AzimuthInstruction = isNorthern ? "Move Right / East →" : "← Move Left / West";
+                AzimuthInstruction = isNorthern ? "Move Right →" : "← Move Left";
             } else {
                 AzimuthInstruction = "Aligned";
             }
@@ -1620,12 +1631,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         private void SaveSettings() {
             try {
+                // Optionally delete the legacy standalone file if it exists
                 string ninaFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
-                string pluginDir = System.IO.Path.Combine(ninaFolder, "Plugins", "2-Point Polar Alignment");
-                if (!System.IO.Directory.Exists(pluginDir)) {
-                    System.IO.Directory.CreateDirectory(pluginDir);
+                string legacyFile = System.IO.Path.Combine(ninaFolder, "Plugins", "2-Point Polar Alignment", "settings.json");
+                if (System.IO.File.Exists(legacyFile)) {
+                    try { System.IO.File.Delete(legacyFile); } catch { }
                 }
-                string settingsFile = System.IO.Path.Combine(pluginDir, "settings.json");
+
                 var settingsObj = new PluginSettings {
                     ExposureTime = ExposureTime,
                     Gain = Gain,
@@ -1639,8 +1651,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     TelescopeMoveRate = TelescopeMoveRate,
                     PlateSolveRetries = PlateSolveRetries
                 };
-                string json = Newtonsoft.Json.JsonConvert.SerializeObject(settingsObj, Newtonsoft.Json.Formatting.Indented);
-                System.IO.File.WriteAllText(settingsFile, json);
+                
+                if (profileService != null) {
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(settingsObj);
+                    var pluginSettings = new global::NINA.Profile.PluginOptionsAccessor(profileService, Guid.Parse("0e9e3e58-42fc-4553-8e6e-aba061af4f54"));
+                    pluginSettings.SetValueString("TwoPointPolarAlignment_Settings", json);
+                }
             } catch (Exception ex) {
                 global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Failed to save settings: {ex.Message}");
             }
@@ -1648,23 +1664,45 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         private void LoadSettings() {
             try {
-                string ninaFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
-                string settingsFile = System.IO.Path.Combine(ninaFolder, "Plugins", "2-Point Polar Alignment", "settings.json");
-                if (System.IO.File.Exists(settingsFile)) {
-                    string json = System.IO.File.ReadAllText(settingsFile);
-                    var settingsObj = Newtonsoft.Json.JsonConvert.DeserializeObject<PluginSettings>(json);
-                    if (settingsObj != null) {
-                        exposureTime = settingsObj.ExposureTime;
-                        gain = settingsObj.Gain;
-                        rotationAmount = settingsObj.RotationAmount;
-                        method = settingsObj.Method;
-                        direction = settingsObj.Direction;
-                        startingPoint = settingsObj.StartingPoint;
-                        filter = settingsObj.Filter;
-                        binning = settingsObj.Binning;
-                        offset = settingsObj.Offset;
-                        telescopeMoveRate = settingsObj.TelescopeMoveRate;
-                        plateSolveRetries = settingsObj.PlateSolveRetries;
+                if (profileService != null) {
+                    var pluginSettings = new global::NINA.Profile.PluginOptionsAccessor(profileService, Guid.Parse("0e9e3e58-42fc-4553-8e6e-aba061af4f54"));
+                    string json = pluginSettings.GetValueString("TwoPointPolarAlignment_Settings", string.Empty);
+                    
+                    // Fallback to legacy file if profile is empty
+                    if (string.IsNullOrEmpty(json)) {
+                        string ninaFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
+                        string legacyFile = System.IO.Path.Combine(ninaFolder, "Plugins", "2-Point Polar Alignment", "settings.json");
+                        if (System.IO.File.Exists(legacyFile)) {
+                            json = System.IO.File.ReadAllText(legacyFile);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(json)) {
+                        var settingsObj = Newtonsoft.Json.JsonConvert.DeserializeObject<PluginSettings>(json);
+                        if (settingsObj != null) {
+                            exposureTime = settingsObj.ExposureTime;
+                            RaisePropertyChanged(nameof(ExposureTime));
+                            gain = settingsObj.Gain;
+                            RaisePropertyChanged(nameof(Gain));
+                            rotationAmount = settingsObj.RotationAmount;
+                            RaisePropertyChanged(nameof(RotationAmount));
+                            method = settingsObj.Method;
+                            RaisePropertyChanged(nameof(Method));
+                            direction = settingsObj.Direction;
+                            RaisePropertyChanged(nameof(Direction));
+                            startingPoint = settingsObj.StartingPoint;
+                            RaisePropertyChanged(nameof(StartingPoint));
+                            filter = settingsObj.Filter;
+                            RaisePropertyChanged(nameof(Filter));
+                            binning = settingsObj.Binning;
+                            RaisePropertyChanged(nameof(Binning));
+                            offset = settingsObj.Offset;
+                            RaisePropertyChanged(nameof(Offset));
+                            telescopeMoveRate = settingsObj.TelescopeMoveRate;
+                            RaisePropertyChanged(nameof(TelescopeMoveRate));
+                            plateSolveRetries = settingsObj.PlateSolveRetries;
+                            RaisePropertyChanged(nameof(PlateSolveRetries));
+                        }
                     }
                 }
             } catch (Exception ex) {
