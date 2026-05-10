@@ -723,9 +723,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                     Binning = binVal, // Adopt user-selected binning!
                     Coordinates = initialCoords, // Use initial as starting hint for instant solve
-                    BlindFailoverEnabled = true, // Fully enabled per user requirement
+                    BlindFailoverEnabled = true, // Keep enabled per prior agreement
                     DisableNotifications = true,
-                    SearchRadius = 30.0, // Widened Search Radius for Manual swings
+                    SearchRadius = 15.0, // Reverted to standard radius per user instruction
                     Regions = 5000.0,
                     MaxObjects = 500
                 };
@@ -1241,14 +1241,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
                     ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, null, imagingMediator, filterWheelMediator);
 
-                    double searchRadiusVal = 15.0;
-                    try {
-                        var radiusProp = plateSolveSettings.GetType().GetProperty("SearchRadius");
-                        if (radiusProp != null) {
-                            searchRadiusVal = Convert.ToDouble(radiusProp.GetValue(plateSolveSettings) ?? 15.0);
-                        }
-                    } catch { }
-
                     currentPosition = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
                     CaptureSolverParameter solverParam = new CaptureSolverParameter {
                         Attempts = 1,
@@ -1256,7 +1248,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         FocalLength = profile.TelescopeSettings.FocalLength,
                         PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                         Binning = binVal,
-                        SearchRadius = (Method == RotationMethod.Manual) ? 30.0 : searchRadiusVal,
+                        SearchRadius = 15.0,
                         Regions = 5000.0,
                         MaxObjects = 500,
                         Coordinates = currentPosition,
@@ -1302,17 +1294,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             // Safety check: verify solved coordinates are not too far from the mount's physical position
             var physicalPos1 = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
             if (Method == RotationMethod.Automatic && physicalPos1 != null) {
-                double searchRadius = 15.0; // default fallback
-                try {
-                    var profile = profileService.ActiveProfile;
-                    var settings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile);
-                    var radiusProp = settings?.GetType().GetProperty("SearchRadius");
-                    if (radiusProp != null) {
-                        searchRadius = Convert.ToDouble(radiusProp.GetValue(settings) ?? 15.0);
-                    }
-                } catch { }
-
-                double safetyThreshold = Math.Max(5.0, searchRadius - 5.0);
+                double safetyThreshold = 10.0; // simplified hard threshold as requested
 
                 double lat1 = physicalPos1.Dec * Math.PI / 180.0;
                 double lat2 = coordinates1.Dec * Math.PI / 180.0;
@@ -1322,7 +1304,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 cosTheta = Math.Clamp(cosTheta, -1.0, 1.0);
                 double separation = Math.Acos(cosTheta) * 180.0 / Math.PI;
 
-                Log($"Solver/Mount Separation (M1): {separation:F2}° (Active Solver Search Radius: {searchRadius:F1}°, Safety Threshold: {safetyThreshold:F1}°).");
+                Log($"Solver/Mount Separation (M1): {separation:F2}° (Safety Threshold: {safetyThreshold:F1}°).");
 
                 if (separation > safetyThreshold) {
                     string errMsg = $"Safety Intercept: The plate solved position is too far from the mount's reported position ({separation:F2}° separation exceeds the {safetyThreshold:F1}° safety threshold). Alignment aborted for safety.";
@@ -1426,22 +1408,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
                     ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, null, imagingMediator, filterWheelMediator);
 
-                    double searchRadiusVal = 15.0;
-                    try {
-                        var radiusProp = plateSolveSettings.GetType().GetProperty("SearchRadius");
-                        if (radiusProp != null) {
-                            searchRadiusVal = Convert.ToDouble(radiusProp.GetValue(plateSolveSettings) ?? 15.0);
-                        }
-                    } catch { }
-
-                    currentPosition = telescopeMediator.GetCurrentPosition();
                     CaptureSolverParameter solverParam = new CaptureSolverParameter {
                         Attempts = 1,
                         ReattemptDelay = TimeSpan.FromSeconds(2),
                         FocalLength = profile.TelescopeSettings.FocalLength,
                         PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                         Binning = binVal,
-                        SearchRadius = (Method == RotationMethod.Manual) ? 30.0 : searchRadiusVal,
+                        SearchRadius = 15.0,
                         Regions = 5000.0,
                         MaxObjects = 500,
                         Coordinates = rotTargetCoords,
@@ -1604,14 +1577,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     IPlateSolver solver = plateSolverFactory.GetPlateSolver(plateSolveSettings);
                     ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, null, imagingMediator, filterWheelMediator);
 
-                    double searchRadiusVal = 15.0;
-                    try {
-                        var radiusProp = plateSolveSettings.GetType().GetProperty("SearchRadius");
-                        if (radiusProp != null) {
-                            searchRadiusVal = Convert.ToDouble(radiusProp.GetValue(plateSolveSettings) ?? 15.0);
-                        }
-                    } catch { }
-
                     currentPosition = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
                     // In Manual/mountless mode, use last solved coordinates as the solver hint
                     var liveHintCoords = currentPosition ?? coordinates2;
@@ -1621,7 +1586,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         FocalLength = profile.TelescopeSettings.FocalLength,
                         PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
                         Binning = binVal,
-                        SearchRadius = (Method == RotationMethod.Manual) ? 30.0 : searchRadiusVal,
+                        SearchRadius = 15.0,
                         Regions = 5000.0,
                         MaxObjects = 500,
                         Coordinates = liveHintCoords,
