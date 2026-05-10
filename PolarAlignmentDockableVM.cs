@@ -235,11 +235,22 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public void Dispose() {
+            try { StopAlignment(); }
+            catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.StopAlignment failed: {ex.Message}"); }
+
             try {
-                statusTimer?.Stop();
-                cameraMediator.RemoveConsumer(this);
-                telescopeMediator.RemoveConsumer(this);
-            } catch { }
+                if (statusTimer != null) {
+                    statusTimer.Tick -= StatusTimer_Tick;
+                    statusTimer.Stop();
+                }
+            }
+            catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.TimerStop failed: {ex.Message}"); }
+
+            try { cameraMediator.RemoveConsumer(this); }
+            catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.RemoveCameraConsumer failed: {ex.Message}"); }
+
+            try { telescopeMediator.RemoveConsumer(this); }
+            catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.RemoveTelescopeConsumer failed: {ex.Message}"); }
         }
 
         public double RotationAmount {
@@ -536,7 +547,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             if (IsRunning) {
                 requestedHome = true;
                 StopAlignment();
-            } else if (IsMountConnected) {
+            } else if (IsMountConnected && !isTaskExecuting) {
+                isTaskExecuting = true;
+                RaisePropertyChanged(nameof(CanStart));
                 Task.Run(async () => {
                     try {
                         if (homePosition != null) {
@@ -551,6 +564,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         Log("Successfully returned to Home Position.");
                     } catch (Exception ex) {
                         Log($"[Error] Failed to complete Home directive: {ex.Message}");
+                    } finally {
+                        isTaskExecuting = false;
+                        RaisePropertyChanged(nameof(CanStart));
                     }
                 });
             }
@@ -1036,6 +1052,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private async Task StartAlignmentAsync() {
+            var cts = alignmentCts ?? throw new InvalidOperationException("Alignment CTS was not initialized.");
+            var token = cts.Token;
             simTimeFactor = -1.0;
             RotationDirection activeDirection = Direction;
             bool activePreRotate = Method == RotationMethod.Automatic && StartingPoint == StartingPointMode.PreRotateHalfRange;
@@ -1353,7 +1371,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
                 Log($"Changing filter to {Filter} (Position: {targetFilterInfo.Position})...");
                 var filterProgress = new Progress<ApplicationStatus>();
-                await filterWheelMediator.ChangeFilter(targetFilterInfo, alignmentCts?.Token ?? System.Threading.CancellationToken.None, filterProgress);
+                await filterWheelMediator.ChangeFilter(targetFilterInfo, token, filterProgress);
                 Log($"Filter successfully changed to {Filter}.");
             }
 
@@ -1369,7 +1387,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 if (targetRA >= 24.0) targetRA -= 24.0;
 
                 Coordinates targetCoords = new Coordinates(targetRA, currentPosition.Dec, currentPosition.Epoch, Coordinates.RAType.Hours);
-                await telescopeMediator.SlewToCoordinatesAsync(targetCoords, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
+                await telescopeMediator.SlewToCoordinatesAsync(targetCoords, token);
                 try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                 Log("Pre-rotation completed successfully.");
             } else {
@@ -1462,7 +1480,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         var appProgress = new Progress<ApplicationStatus>();
 
                         try {
-                            result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
+                            result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, token);
                             if (result != null && result.Success) {
                                 break;
                             }
@@ -1492,7 +1510,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
 
                 if (phaseCFailed) {
-                    if (await AttemptRescueIfNeeded(failureReason)) {
+                    if (await AttemptRescueIfNeeded(failureReason, token)) {
                         Log("Rough Finder Rescue cycle completed successfully. Sequence halted per operator feedback so user can initialize final high-precision run manually.");
                         return; // Do not auto-continue; stop cycle gracefully.
                     } else {
@@ -1570,7 +1588,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 Log($"Manual rotation tracking concluded. Recorded simulation baseline: {currentSimulationOffset:F1}°");
             } else {
                 Log($"Automatically slewing RA axis by {RotationAmount:F1}° {activeDirection} to theoretical target RA {rotTargetCoords.RAString}...");
-                await telescopeMediator.SlewToCoordinatesAsync(rotTargetCoords, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
+                await telescopeMediator.SlewToCoordinatesAsync(rotTargetCoords, token);
                 try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                 Log("Automatic rotation completed successfully.");
             }
@@ -1648,7 +1666,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     var appProgress = new Progress<ApplicationStatus>();
 
                     try {
-                        result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
+                        result = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, token);
                         if (result != null && result.Success) {
                             break;
                         }
@@ -1733,17 +1751,26 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             CalculateErrors(coordinates1, angle1, coordinates2, angle2, isInitial: true);
 
             // Start fast 1-second cycle rating text pulsing task
+            var blinkCts = alignmentCts; // Capture token before it can be nulled
             _ = Task.Run(async () => {
-                while (IsRunning) {
-                    await Task.Delay(500); // 500ms bright, 500ms dim (1s cycle)
-                    blinkToggle = !blinkToggle;
-                    if (TotalErrorValue <= 1.0) {
-                        var ratingBrush = new SolidColorBrush(blinkToggle ? Color.FromRgb(0x00, 0xFF, 0x7F) : Color.FromArgb(0x33, 0x00, 0xFF, 0x7F));
-                        ratingBrush.Freeze();
-                        TotalErrorRatingColor = ratingBrush;
+                try {
+                    while (!blinkCts.Token.IsCancellationRequested) {
+                        await Task.Delay(500, blinkCts.Token); // 500ms bright, 500ms dim (1s cycle)
+                        blinkToggle = !blinkToggle;
+                        if (TotalErrorValue <= 1.0) {
+                            var ratingBrush = new SolidColorBrush(blinkToggle ? Color.FromRgb(0x00, 0xFF, 0x7F) : Color.FromArgb(0x33, 0x00, 0xFF, 0x7F));
+                            ratingBrush.Freeze();
+                            System.Windows.Application.Current.Dispatcher.BeginInvoke(() => {
+                                TotalErrorRatingColor = ratingBrush;
+                            });
+                        }
                     }
+                } catch (OperationCanceledException) {
+                    // Expected on stop — exit cleanly
+                } catch (Exception ex) {
+                    global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Blink task error: {ex.Message}");
                 }
-            });
+            }, blinkCts.Token);
 
             // Enter live loop
             int simStep = 0;
@@ -1821,7 +1848,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     var appProgress = new Progress<ApplicationStatus>();
 
                     try {
-                        liveResult = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
+                        liveResult = await captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, token);
                     } catch (Exception ex) {
                         Log($"[Warning] Live solve failed: {ex.Message}. Retrying...");
                     }
@@ -1906,7 +1933,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             return 45.0; // Fallback
         }
 
-        private async Task<bool> AttemptRescueIfNeeded(string failureReason) {
+        private async Task<bool> AttemptRescueIfNeeded(string failureReason, CancellationToken token) {
             if (!EnableOnePointAlignment) return false;
             Log($"[Intercept] Polar Alignment condition fail: {failureReason}");
             
@@ -1917,13 +1944,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             );
             
             if (agree) {
-                await RunRoughFinderEngineAsync();
+                await RunRoughFinderEngineAsync(token);
                 return true;
             }
             return false;
         }
 
-        private async Task RunRoughFinderEngineAsync() {
+        private async Task RunRoughFinderEngineAsync(CancellationToken rescueToken) {
             Log("Initializing Rough Finder Rescue Engine Loop...");
             Notification.ShowSuccess("Rough Finder Rescue Engaged. Watch live telemetry to reach center target zone.");
             
@@ -1951,7 +1978,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 PlateSolveResult res = null;
                 
                 if (isSim) {
-                    await Task.Delay(1500);
+                    await Task.Delay(1500, rescueToken);
                     simStep++;
                     bool isN = GetLatitude() >= 0;
                     double sDec = isN ? Math.Min(89.95, 79.0 + simStep * 2.5) : Math.Max(-89.95, -79.0 - simStep * 2.5); // Simulates converging to the active pole
@@ -1981,7 +2008,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         }
                     });
                     try {
-                        res = await captureSolver.Solve(seq, solverParam, prog, appStatusProg, alignmentCts?.Token ?? CancellationToken.None);
+                        res = await captureSolver.Solve(seq, solverParam, prog, appStatusProg, rescueToken);
                     } catch { } finally {
                         System.Windows.Application.Current.Dispatcher.Invoke(() => { IsBlindSolvingActive = false; });
                     }
@@ -2087,156 +2114,158 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private void UpdateErrorViewFromPolarAxis(Vector3D axis, double referenceRA) {
-            // Convert axis to Dec and RA
-            double decP = Math.Asin(axis.Z) * 180.0 / Math.PI;
-            double raP = Math.Atan2(axis.Y, axis.X) * 12.0 / Math.PI;
-            if (raP < 0) raP += 24.0;
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => {
+                // Convert axis to Dec and RA
+                double decP = Math.Asin(Math.Clamp(axis.Z, -1.0, 1.0)) * 180.0 / Math.PI;
+                double raP = Math.Atan2(axis.Y, axis.X) * 12.0 / Math.PI;
+                if (raP < 0) raP += 24.0;
 
-            // Get observer's Latitude
-            double latitude = GetLatitude();
-            double latRad = latitude * Math.PI / 180.0;
+                // Get observer's Latitude
+                double latitude = GetLatitude();
+                double latRad = latitude * Math.PI / 180.0;
 
-            // Get Local Sidereal Time (LST)
-            double lst = 0.0;
-            try {
-                lst = telescopeMediator?.GetInfo()?.SiderealTime ?? 0.0;
-            } catch { }
+                // Get Local Sidereal Time (LST)
+                double lst = 0.0;
+                try {
+                    lst = telescopeMediator?.GetInfo()?.SiderealTime ?? 0.0;
+                } catch { }
 
-            if (lst == 0.0) {
-                lst = referenceRA;
-            }
-
-            // Hour Angle of polar axis
-            double haP = lst - raP;
-            if (haP < 0) haP += 24.0;
-            if (haP >= 24.0) haP -= 24.0;
-
-            double decRad = decP * Math.PI / 180.0;
-            double haRad = haP * 15.0 * Math.PI / 180.0;
-
-            // Rigorous equatorial to horizontal conversion
-            double sinAlt = Math.Sin(decRad) * Math.Sin(latRad) + Math.Cos(decRad) * Math.Cos(latRad) * Math.Cos(haRad);
-            sinAlt = Math.Clamp(sinAlt, -1.0, 1.0);
-            double altP = Math.Asin(sinAlt) * 180.0 / Math.PI;
-
-            double cosAlt = Math.Cos(altP * Math.PI / 180.0);
-            double azP = 0.0;
-            if (Math.Abs(cosAlt) > 1e-6) {
-                double cosAz = (Math.Sin(decRad) * Math.Cos(latRad) - Math.Cos(decRad) * Math.Sin(latRad) * Math.Cos(haRad)) / cosAlt;
-                double sinAz = (-Math.Cos(decRad) * Math.Sin(haRad)) / cosAlt;
-                cosAz = Math.Clamp(cosAz, -1.0, 1.0);
-                azP = Math.Atan2(sinAz, cosAz) * 180.0 / Math.PI;
-                if (azP < 0) azP += 360.0;
-            }
-
-            // True Pole coordinates
-            double trueAlt = Math.Abs(latitude);
-            double trueAz = (latitude >= 0) ? 0.0 : 180.0;
-
-            // Compute differences
-            double altErrorDeg = altP - trueAlt;
-            double azDiff = azP - trueAz;
-            while (azDiff > 180.0) azDiff -= 360.0;
-            while (azDiff < -180.0) azDiff += 360.0;
-            double azErrorDeg = azDiff * Math.Cos(latRad);
-
-            // Convert to arcminutes
-            double altErrorArcmin = altErrorDeg * 60.0;
-            double azErrorArcmin = azErrorDeg * 60.0;
-
-            if (simTimeFactor > 0) {
-                double jitter = (new Random().NextDouble() - 0.5) * 0.5; // Visual jitter multiplier
-                altErrorArcmin = (altErrorArcmin * simTimeFactor) + jitter;
-                azErrorArcmin = (azErrorArcmin * simTimeFactor) + jitter;
-            }
-
-            // Format strings
-            AltitudeError = FormatError(altErrorArcmin);
-            AzimuthError = FormatError(azErrorArcmin);
-
-            // Calculate Total Error (Euclidean norm)
-            TotalErrorValue = Math.Sqrt(altErrorArcmin * altErrorArcmin + azErrorArcmin * azErrorArcmin);
-            TotalError = FormatTotalError(TotalErrorValue);
-
-            // Determine which axis is the major contributor to error (Priority Highlight)
-            // Ignore tie-breaking if absolute error is practically aligned (< 0.2')
-            double absAlt = Math.Abs(altErrorArcmin);
-            double absAz = Math.Abs(azErrorArcmin);
-            
-            if (TotalErrorValue < 0.5) {
-                IsAltitudePriority = false;
-                IsAzimuthPriority = false;
-            } else if (absAlt > absAz + 0.1) {
-                IsAltitudePriority = true;
-                IsAzimuthPriority = false;
-            } else if (absAz > absAlt + 0.1) {
-                IsAltitudePriority = false;
-                IsAzimuthPriority = true;
-            } else {
-                IsAltitudePriority = false;
-                IsAzimuthPriority = false;
-            }
-
-            // Derive directional instructions and ratings
-            bool isNorthern = latitude >= 0;
-            if (azErrorArcmin > 0) {
-                AzimuthInstruction = isNorthern ? "← Move Left" : "Move Right →";
-            } else if (azErrorArcmin < 0) {
-                AzimuthInstruction = isNorthern ? "Move Right →" : "← Move Left";
-            } else {
-                AzimuthInstruction = "Aligned";
-            }
-
-            if (altErrorArcmin > 0) {
-                // Standard "Down" direction
-                if (AltKnobDirection == AltitudeKnobDirection.UpArrow) {
-                    AltitudeInstruction = "Move Down ↓";
-                } else if (AltKnobDirection == AltitudeKnobDirection.Clockwise) {
-                    AltitudeInstruction = "Move Down ↺";
-                } else {
-                    AltitudeInstruction = "Move Down ↻";
+                if (lst == 0.0) {
+                    lst = referenceRA;
                 }
-            } else if (altErrorArcmin < 0) {
-                // Standard "Up" direction
-                if (AltKnobDirection == AltitudeKnobDirection.UpArrow) {
-                    AltitudeInstruction = "Move Up ↑";
-                } else if (AltKnobDirection == AltitudeKnobDirection.Clockwise) {
-                    AltitudeInstruction = "Move Up ↻";
-                } else {
-                    AltitudeInstruction = "Move Up ↺";
+
+                // Hour Angle of polar axis
+                double haP = lst - raP;
+                if (haP < 0) haP += 24.0;
+                if (haP >= 24.0) haP -= 24.0;
+
+                double decRad = decP * Math.PI / 180.0;
+                double haRad = haP * 15.0 * Math.PI / 180.0;
+
+                // Rigorous equatorial to horizontal conversion
+                double sinAlt = Math.Sin(decRad) * Math.Sin(latRad) + Math.Cos(decRad) * Math.Cos(latRad) * Math.Cos(haRad);
+                sinAlt = Math.Clamp(sinAlt, -1.0, 1.0);
+                double altP = Math.Asin(sinAlt) * 180.0 / Math.PI;
+
+                double cosAlt = Math.Cos(altP * Math.PI / 180.0);
+                double azP = 0.0;
+                if (Math.Abs(cosAlt) > 1e-6) {
+                    double cosAz = (Math.Sin(decRad) * Math.Cos(latRad) - Math.Cos(decRad) * Math.Sin(latRad) * Math.Cos(haRad)) / cosAlt;
+                    double sinAz = (-Math.Cos(decRad) * Math.Sin(haRad)) / cosAlt;
+                    cosAz = Math.Clamp(cosAz, -1.0, 1.0);
+                    azP = Math.Atan2(sinAz, cosAz) * 180.0 / Math.PI;
+                    if (azP < 0) azP += 360.0;
                 }
-            } else {
-                AltitudeInstruction = "Aligned";
-            }
 
-            SolidColorBrush solidBrush;
-            SolidColorBrush ratingBrush;
+                // True Pole coordinates
+                double trueAlt = Math.Abs(latitude);
+                double trueAz = (latitude >= 0) ? 0.0 : 180.0;
 
-            if (TotalErrorValue <= 1.0) {
-                TotalErrorRating = "✨ Excellent Alignment";
-                solidBrush = new SolidColorBrush(Color.FromRgb(0x00, 0xFF, 0x7F)); // Solid SpringGreen for Total Error (never blinks)
-                ratingBrush = new SolidColorBrush(blinkToggle ? Color.FromRgb(0x00, 0xFF, 0x7F) : Color.FromArgb(0x33, 0x00, 0xFF, 0x7F)); // Pulsing SpringGreen for Rating
-            } else if (TotalErrorValue <= 3.0) {
-                TotalErrorRating = "🟢 Good Alignment";
-                solidBrush = new SolidColorBrush(Color.FromRgb(0x98, 0xFB, 0x98)); // PaleGreen
-                ratingBrush = solidBrush;
-            } else if (TotalErrorValue <= 10.0) {
-                TotalErrorRating = "🟡 Fair Alignment";
-                solidBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)); // Gold
-                ratingBrush = solidBrush;
-            } else {
-                TotalErrorRating = "🔴 Poor Alignment";
-                solidBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x4D)); // Light Red
-                ratingBrush = solidBrush;
-            }
+                // Compute differences
+                double altErrorDeg = altP - trueAlt;
+                double azDiff = azP - trueAz;
+                while (azDiff > 180.0) azDiff -= 360.0;
+                while (azDiff < -180.0) azDiff += 360.0;
+                double azErrorDeg = azDiff * Math.Cos(latRad);
 
-            solidBrush.Freeze();
-            TotalErrorColor = solidBrush;
+                // Convert to arcminutes
+                double altErrorArcmin = altErrorDeg * 60.0;
+                double azErrorArcmin = azErrorDeg * 60.0;
 
-            ratingBrush.Freeze();
-            TotalErrorRatingColor = ratingBrush;
+                if (simTimeFactor > 0) {
+                    double jitter = (new Random().NextDouble() - 0.5) * 0.5; // Visual jitter multiplier
+                    altErrorArcmin = (altErrorArcmin * simTimeFactor) + jitter;
+                    azErrorArcmin = (azErrorArcmin * simTimeFactor) + jitter;
+                }
 
-            Log($"Calculated Alignment Errors: Alt {AltitudeError}, Az {AzimuthError} (Alt: {altErrorArcmin:F1}', Az: {azErrorArcmin:F1}'), Total: {TotalError} ({TotalErrorValue:F1}')");
+                // Format strings
+                AltitudeError = FormatError(altErrorArcmin);
+                AzimuthError = FormatError(azErrorArcmin);
+
+                // Calculate Total Error (Euclidean norm)
+                TotalErrorValue = Math.Sqrt(altErrorArcmin * altErrorArcmin + azErrorArcmin * azErrorArcmin);
+                TotalError = FormatTotalError(TotalErrorValue);
+
+                // Determine which axis is the major contributor to error (Priority Highlight)
+                // Ignore tie-breaking if absolute error is practically aligned (< 0.2')
+                double absAlt = Math.Abs(altErrorArcmin);
+                double absAz = Math.Abs(azErrorArcmin);
+                
+                if (TotalErrorValue < 0.5) {
+                    IsAltitudePriority = false;
+                    IsAzimuthPriority = false;
+                } else if (absAlt > absAz + 0.1) {
+                    IsAltitudePriority = true;
+                    IsAzimuthPriority = false;
+                } else if (absAz > absAlt + 0.1) {
+                    IsAltitudePriority = false;
+                    IsAzimuthPriority = true;
+                } else {
+                    IsAltitudePriority = false;
+                    IsAzimuthPriority = false;
+                }
+
+                // Derive directional instructions and ratings
+                bool isNorthern = latitude >= 0;
+                if (azErrorArcmin > 0) {
+                    AzimuthInstruction = isNorthern ? "← Move Left" : "Move Right →";
+                } else if (azErrorArcmin < 0) {
+                    AzimuthInstruction = isNorthern ? "Move Right →" : "← Move Left";
+                } else {
+                    AzimuthInstruction = "Aligned";
+                }
+
+                if (altErrorArcmin > 0) {
+                    // Standard "Down" direction
+                    if (AltKnobDirection == AltitudeKnobDirection.UpArrow) {
+                        AltitudeInstruction = "Move Down ↓";
+                    } else if (AltKnobDirection == AltitudeKnobDirection.Clockwise) {
+                        AltitudeInstruction = "Move Down ↺";
+                    } else {
+                        AltitudeInstruction = "Move Down ↻";
+                    }
+                } else if (altErrorArcmin < 0) {
+                    // Standard "Up" direction
+                    if (AltKnobDirection == AltitudeKnobDirection.UpArrow) {
+                        AltitudeInstruction = "Move Up ↑";
+                    } else if (AltKnobDirection == AltitudeKnobDirection.Clockwise) {
+                        AltitudeInstruction = "Move Up ↻";
+                    } else {
+                        AltitudeInstruction = "Move Up ↺";
+                    }
+                } else {
+                    AltitudeInstruction = "Aligned";
+                }
+
+                SolidColorBrush solidBrush;
+                SolidColorBrush ratingBrush;
+
+                if (TotalErrorValue <= 1.0) {
+                    TotalErrorRating = "✨ Excellent Alignment";
+                    solidBrush = new SolidColorBrush(Color.FromRgb(0x00, 0xFF, 0x7F)); // Solid SpringGreen for Total Error (never blinks)
+                    ratingBrush = new SolidColorBrush(blinkToggle ? Color.FromRgb(0x00, 0xFF, 0x7F) : Color.FromArgb(0x33, 0x00, 0xFF, 0x7F)); // Pulsing SpringGreen for Rating
+                } else if (TotalErrorValue <= 3.0) {
+                    TotalErrorRating = "🟢 Good Alignment";
+                    solidBrush = new SolidColorBrush(Color.FromRgb(0x98, 0xFB, 0x98)); // PaleGreen
+                    ratingBrush = solidBrush;
+                } else if (TotalErrorValue <= 10.0) {
+                    TotalErrorRating = "🟡 Fair Alignment";
+                    solidBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)); // Gold
+                    ratingBrush = solidBrush;
+                } else {
+                    TotalErrorRating = "🔴 Poor Alignment";
+                    solidBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x4D)); // Light Red
+                    ratingBrush = solidBrush;
+                }
+
+                solidBrush.Freeze();
+                TotalErrorColor = solidBrush;
+
+                ratingBrush.Freeze();
+                TotalErrorRatingColor = ratingBrush;
+
+                Log($"Calculated Alignment Errors: Alt {AltitudeError}, Az {AzimuthError} (Alt: {altErrorArcmin:F1}', Az: {azErrorArcmin:F1}'), Total: {TotalError} ({TotalErrorValue:F1}')");
+            }));
         }
 
         private string FormatTotalError(double errorArcmin) {
