@@ -6,6 +6,7 @@ using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Model;
 using NINA.Core.Model.Equipment;
 using NINA.Equipment.Equipment.MyCamera;
+using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Core.Utility.Notification;
 using NINA.PlateSolving;
 using NINA.PlateSolving.Interfaces;
@@ -56,7 +57,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
     }
 
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
-    public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer {
+    public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer, ITelescopeConsumer {
 
         private double rotationAmount = 90.0;
         private RotationMethod method = RotationMethod.Automatic;
@@ -97,6 +98,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private readonly IImagingMediator imagingMediator;
         private readonly IFilterWheelMediator filterWheelMediator;
         private readonly System.Windows.Threading.DispatcherTimer statusTimer;
+        
+        private CameraInfo currentCameraInfo;
+        private TelescopeInfo currentTelescopeInfo;
         private bool lastIsCameraConnected;
         private bool lastIsMountConnected;
         private bool hasExecutedBefore = false;
@@ -120,6 +124,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             this.plateSolverFactory = plateSolverFactory;
             this.imagingMediator = imagingMediator;
             this.filterWheelMediator = filterWheelMediator;
+            
+            cameraMediator.RegisterConsumer(this);
+            telescopeMediator.RegisterConsumer(this);
+            
             Title = "2-Point Polar Alignment";
 
             // Initialize connection states
@@ -155,10 +163,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public override bool IsTool => true;
-
-        public bool IsCameraConnected => cameraMediator?.GetInfo()?.Connected ?? false;
-
-        public bool IsMountConnected => telescopeMediator?.GetInfo()?.Connected ?? false;
+        
+        public bool IsCameraConnected => (currentCameraInfo?.Connected ?? cameraMediator?.GetInfo()?.Connected ?? false);
+        
+        public bool IsMountConnected => (currentTelescopeInfo?.Connected ?? telescopeMediator?.GetInfo()?.Connected ?? false);
 
         public bool CanRun => IsCameraConnected && IsMountConnected;
 
@@ -188,12 +196,30 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public void UpdateDeviceInfo(CameraInfo deviceInfo) {
-            // Unused but required by ICameraConsumer
+            currentCameraInfo = deviceInfo;
+            
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                RaisePropertyChanged(nameof(IsCameraConnected));
+                RaisePropertyChanged(nameof(CanRun));
+                RaisePropertyChanged(nameof(CanStart));
+            });
+        }
+
+        public void UpdateDeviceInfo(TelescopeInfo deviceInfo) {
+            currentTelescopeInfo = deviceInfo;
+            
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                RaisePropertyChanged(nameof(IsMountConnected));
+                RaisePropertyChanged(nameof(CanRun));
+                RaisePropertyChanged(nameof(CanStart));
+            });
         }
 
         public void Dispose() {
             try {
                 statusTimer?.Stop();
+                cameraMediator.RemoveConsumer(this);
+                telescopeMediator.RemoveConsumer(this);
             } catch { }
         }
 

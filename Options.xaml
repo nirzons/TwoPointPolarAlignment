@@ -264,6 +264,39 @@
 
                         <!-- Buttons Row -->
                         <Grid Grid.Row="2" Margin="0,4,0,8">
+                            <Grid.Resources>
+                                <Style x:Key="ActionButtonStyle" TargetType="Button">
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="buttonBorder" Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0">
+                                                    <Grid>
+                                                        <Border x:Name="hoverGlow" Background="White" Opacity="0" CornerRadius="6"/>
+                                                        <ContentPresenter x:Name="content" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                                                    </Grid>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="hoverGlow" Property="Opacity" Value="0.18"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="hoverGlow" Property="Background" Value="Black"/>
+                                                        <Setter TargetName="hoverGlow" Property="Opacity" Value="0.2"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter TargetName="buttonBorder" Property="Background" Value="#353540"/>
+                                                        <Setter TargetName="content" Property="Opacity" Value="0.5"/>
+                                                        <Setter Property="Cursor" Value="Arrow"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Grid.Resources>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -273,29 +306,13 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <!-- Start Button -->
-                            <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanStart}" Background="{DynamicResource MahApps.Brushes.Accent}" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="0,0,0,6">
-                                <Button.Resources>
-                                    <Style TargetType="Border">
-                                        <Setter Property="CornerRadius" Value="6" />
-                                    </Style>
-                                </Button.Resources>
-                            </Button>
+                            <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource ActionButtonStyle}" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanStart}" Background="#22C55E" Margin="0,0,0,6" />
+                            
                             <!-- Stop Button -->
-                            <Button Grid.Row="1" Grid.Column="0" Content="Stop" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="0,0,3,0">
-                                <Button.Resources>
-                                    <Style TargetType="Border">
-                                        <Setter Property="CornerRadius" Value="6" />
-                                    </Style>
-                                </Button.Resources>
-                            </Button>
+                            <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource ActionButtonStyle}" Content="Stop" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Margin="0,0,3,0" />
+                            
                             <!-- Home Button -->
-                            <Button Grid.Row="1" Grid.Column="1" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#22C55E" Foreground="White" FontWeight="Bold" Cursor="Hand" Margin="3,0,0,0">
-                                <Button.Resources>
-                                    <Style TargetType="Border">
-                                        <Setter Property="CornerRadius" Value="6" />
-                                    </Style>
-                                </Button.Resources>
-                            </Button>
+                            <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource ActionButtonStyle}" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#22C55E" Margin="3,0,0,0" />
                         </Grid>
 
                         <!-- Log Console -->
