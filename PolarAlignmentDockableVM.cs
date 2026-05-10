@@ -168,7 +168,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         
         public bool IsMountConnected => (currentTelescopeInfo?.Connected ?? telescopeMediator?.GetInfo()?.Connected ?? false);
 
-        public bool CanRun => IsCameraConnected && IsMountConnected;
+        public bool CanRun => IsCameraConnected && (Method == RotationMethod.Manual || IsMountConnected);
 
         private void ProfileService_ProfileChanged(object sender, EventArgs e) {
             System.Windows.Application.Current.Dispatcher.Invoke(() => {
@@ -237,6 +237,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 method = value;
                 RaisePropertyChanged(nameof(Method));
+                RaisePropertyChanged(nameof(CanRun));
+                RaisePropertyChanged(nameof(CanStart));
                 SaveSettings();
             }
         }
@@ -514,7 +516,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private async Task StartAlignmentAsync() {
             simTimeFactor = -1.0;
             RotationDirection activeDirection = Direction;
-            bool activePreRotate = StartingPoint == StartingPointMode.PreRotateHalfRange;
+            bool activePreRotate = Method == RotationMethod.Automatic && StartingPoint == StartingPointMode.PreRotateHalfRange;
             bool skipHomeSlew = false;
             IsReversedFlowActive = false;
 
@@ -657,13 +659,15 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
             // Save original tracking state and disable tracking for polar alignment
             bool originalTracking = false;
-            try {
-                originalTracking = telescopeMediator.GetInfo()?.TrackingEnabled ?? false;
-                if (originalTracking) {
-                    telescopeMediator.SetTrackingEnabled(false);
-                    Log("Disabling telescope tracking for polar alignment sequence.");
-                }
-            } catch { }
+            if (IsMountConnected) {
+                try {
+                    originalTracking = telescopeMediator.GetInfo()?.TrackingEnabled ?? false;
+                    if (originalTracking) {
+                        telescopeMediator.SetTrackingEnabled(false);
+                        Log("Disabling telescope tracking for polar alignment sequence.");
+                    }
+                } catch { }
+            }
 
             try {
                 // ==================== PHASE B: Initial Positioning & Verification ====================
@@ -676,9 +680,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
             Log("Initiating Phase B (Initial Positioning & Verification)...");
 
-            var currentPosition = telescopeMediator.GetCurrentPosition();
-            if (currentPosition == null) {
-                throw new InvalidOperationException("Could not retrieve current telescope position.");
+            var currentPosition = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
+            if (currentPosition == null && Method == RotationMethod.Automatic) {
+                throw new InvalidOperationException("Could not retrieve current telescope position for Automatic mode.");
             }
 
             if (Method == RotationMethod.Automatic) {
@@ -893,7 +897,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         }
                     } catch { }
 
-                    currentPosition = telescopeMediator.GetCurrentPosition();
+                    currentPosition = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
                     CaptureSolverParameter solverParam = new CaptureSolverParameter {
                         Attempts = 1,
                         ReattemptDelay = TimeSpan.FromSeconds(2),
@@ -904,7 +908,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         Regions = 5000.0,
                         MaxObjects = 500,
                         Coordinates = currentPosition,
-                        BlindFailoverEnabled = false,
+                        BlindFailoverEnabled = true,
                         DisableNotifications = true
                     };
 
@@ -944,8 +948,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             Log($"Solved initial coordinates successfully: RA {coordinates1.RAString}, Dec {coordinates1.DecString}, Orientation Angle: {angle1:F2}°");
 
             // Safety check: verify solved coordinates are not too far from the mount's physical position
-            var physicalPos1 = telescopeMediator.GetCurrentPosition();
-            if (physicalPos1 != null) {
+            var physicalPos1 = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
+            if (Method == RotationMethod.Automatic && physicalPos1 != null) {
                 double searchRadius = 15.0; // default fallback
                 try {
                     var profile = profileService.ActiveProfile;
@@ -984,11 +988,19 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             Log("Initiating Phase D (The Rotation)...");
 
             if (!IsRunning) throw new OperationCanceledException("Alignment sequence was stopped by user.");
+            // Universally calculate theoretical destination coordinates to drive slewing AND plate solver hints
+            var hintBasePos = coordinates1 ?? telescopeMediator.GetCurrentPosition();
+            double rotOffsetHours = RotationAmount / 15.0;
+            double rotTargetRA = hintBasePos.RA + (activeDirection == RotationDirection.East ? rotOffsetHours : -rotOffsetHours);
+            if (rotTargetRA < 0) rotTargetRA += 24.0;
+            if (rotTargetRA >= 24.0) rotTargetRA -= 24.0;
+            Coordinates rotTargetCoords = new Coordinates(rotTargetRA, hintBasePos.Dec, hintBasePos.Epoch, Coordinates.RAType.Hours);
+
             if (Method == RotationMethod.Manual) {
-                Log($"[Manual Rotation] Please release the clutches, manually rotate the RA axis by approximately {RotationAmount:F1}° {activeDirection}, re-engage clutches, and click OK.");
+                Log($"[Manual Rotation] Please rotate the mount's RA axis by approximately {RotationAmount:F1}° {activeDirection}, and click OK.");
                 System.Windows.Application.Current.Dispatcher.Invoke(() => {
                     System.Windows.MessageBox.Show(
-                        $"Please release the clutches, manually rotate the RA axis by approximately {RotationAmount:F1}° {activeDirection}, re-engage the clutches, and click OK to continue.",
+                        $"Please rotate the mount's RA axis manually by approximately {RotationAmount:F1}° {activeDirection}, and click OK to continue.",
                         "Manual RA Rotation Required",
                         System.Windows.MessageBoxButton.OK,
                         System.Windows.MessageBoxImage.Information
@@ -996,15 +1008,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 });
                 Log("Manual rotation completed by user.");
             } else {
-                var physicalPos = telescopeMediator.GetCurrentPosition() ?? coordinates1;
-                double offsetHours = RotationAmount / 15.0;
-                double targetRA = physicalPos.RA + (activeDirection == RotationDirection.East ? offsetHours : -offsetHours);
-                if (targetRA < 0) targetRA += 24.0;
-                if (targetRA >= 24.0) targetRA -= 24.0;
- 
-                Coordinates targetCoords = new Coordinates(targetRA, physicalPos.Dec, physicalPos.Epoch, Coordinates.RAType.Hours);
-                Log($"Automatically slewing RA axis by {RotationAmount:F1}° {activeDirection} to target RA {targetCoords.RAString}...");
-                await telescopeMediator.SlewToCoordinatesAsync(targetCoords, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
+                Log($"Automatically slewing RA axis by {RotationAmount:F1}° {activeDirection} to theoretical target RA {rotTargetCoords.RAString}...");
+                await telescopeMediator.SlewToCoordinatesAsync(rotTargetCoords, alignmentCts?.Token ?? System.Threading.CancellationToken.None);
                 try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                 Log("Automatic rotation completed successfully.");
             }
@@ -1056,8 +1061,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         SearchRadius = searchRadiusVal,
                         Regions = 5000.0,
                         MaxObjects = 500,
-                        Coordinates = currentPosition,
-                        BlindFailoverEnabled = false,
+                        Coordinates = rotTargetCoords,
+                        BlindFailoverEnabled = true,
                         DisableNotifications = true
                     };
 
@@ -1098,8 +1103,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             Log($"Solved second coordinates successfully: RA {coordinates2.RAString}, Dec {coordinates2.DecString}, Orientation Angle: {angle2:F2}°");
 
             // Safety check: verify second solved coordinates are not too far from the mount's physical position
-            var physicalPos2 = telescopeMediator.GetCurrentPosition();
-            if (physicalPos2 != null) {
+            var physicalPos2 = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
+            if (Method == RotationMethod.Automatic && physicalPos2 != null) {
                 double searchRadius = 15.0; // default fallback
                 try {
                     var profile = profileService.ActiveProfile;
