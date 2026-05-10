@@ -1,0 +1,381 @@
+=== Assemblies loaded: 13 ===
+
+=== Searching for SequenceItem, ISequenceItem, SequenceItemBase, or Instruction types ===
+Assembly: NINA.Core, Type: NINA.Core.Model.SequenceItemSkippedException (IsInterface: False, IsAbstract: False)
+  Base: System.Exception
+Assembly: NINA.Sequencer, Type: NINA.View.Sequencer.MiniSequencer.MiniSequenceItem (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.Controls.UserControl
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.Serialization.SequenceItemCreationConverter (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Serialization.JsonCreationConverter`1[[NINA.Sequencer.SequenceItem.ISequenceItem, NINA.Sequencer, Version=3.0.0.2017, Culture=neutral, PublicKeyToken=null]]
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.Utility.InstructionErrorBehavior (IsInterface: False, IsAbstract: False)
+  Base: System.Enum
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.ISequenceItem (IsInterface: True, IsAbstract: True)
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.SequenceItem (IsInterface: False, IsAbstract: True)
+  Base: NINA.Sequencer.SequenceHasChanged
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.UnknownSequenceItem (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.FindHome (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.ParkScope (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.SetTracking (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.SlewScopeToAltAz (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.UnparkScope (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Switch.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Switch.SetSwitchValue (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.SafetyMonitor.WaitUntilSafe (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Rotator.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.Center (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.CenterAndRotate (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.Platesolving.Center
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.SolveAndRotate (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.SolveAndSync (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.SmartExposure (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeExposure (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeManyExposures (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeSubframeExposure (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Guider.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Guider.Dither (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Guider.StartGuiding (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Guider.StopGuiding (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Focuser.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Focuser.MoveFocuserByTemperature (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Focuser.MoveFocuserRelative (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoBrightnessFlat (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoExposureFlat (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.CloseCover (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.OpenCover (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SetBrightness (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.ToggleLight (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.TrainedDarkFlatExposure (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.TrainedFlatExposure (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.Container.SequentialContainer
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FilterWheel.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.CloseDomeShutter (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.DisableDomeSynchronization (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.EnableDomeSynchronization (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.FindHomeDome (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.OpenDomeShutter (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.ParkDome (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.SlewDomeAzimuth (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.SynchronizeDome (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Camera.CoolCamera (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Camera.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Camera.DewHeater (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Camera.SetReadoutMode (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Camera.SetUSBLimit (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Camera.WarmCamera (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Autofocus.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Autofocus.RunAutofocus (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.LoopForAltitudeBase (IsInterface: False, IsAbstract: True)
+  Base: NINA.Sequencer.Conditions.SequenceCondition
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.LoopForSunMoonAltitudeBase (IsInterface: False, IsAbstract: True)
+  Base: NINA.Sequencer.SequenceItem.Utility.LoopForAltitudeBase
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.Annotation (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.Datatemplates (IsInterface: False, IsAbstract: False)
+  Base: System.Windows.ResourceDictionary
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.ExternalScript (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.MessageBox (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.MessageBoxResult (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForAltitude (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.Utility.WaitForAltitudeBase
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForAltitudeBase (IsInterface: False, IsAbstract: True)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForMoonAltitude (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.Utility.WaitForAltitudeBase
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForSunAltitude (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.Utility.WaitForAltitudeBase
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForTime (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForTimeSpan (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.SequenceItem
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitLoopData (IsInterface: False, IsAbstract: False)
+  Base: NINA.Core.Utility.BaseINPC
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitUntilAboveHorizon (IsInterface: False, IsAbstract: False)
+  Base: NINA.Sequencer.SequenceItem.Utility.WaitForAltitudeBase
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.SequenceItem+<Run>d__66 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.SequenceItem+<SkipToEndOfSequence>d__67 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.ParkScope+<Execute>d__9 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.SlewScopeToAltAz+<Execute>d__15 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec+<Execute>d__17 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Telescope.UnparkScope+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.SafetyMonitor.WaitUntilSafe+<Execute>d__18 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.Center+<DoCenter>d__27 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.Center+<Execute>d__28 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.CenterAndRotate+<Execute>d__10 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.CenterAndRotate+<Solve>d__11 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.SolveAndRotate+<Execute>d__28 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.SolveAndRotate+<Solve>d__29 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.SolveAndSync+<DoSolve>d__18 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Platesolving.SolveAndSync+<Execute>d__17 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeExposure+<Execute>d__45 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeExposure+<ProcessImageData>d__46 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeSubframeExposure+<Execute>d__49 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Imaging.TakeSubframeExposure+<ProcessImageData>d__50 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Guider.StartGuiding+<Execute>d__12 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoBrightnessFlat+<>c__DisplayClass23_0 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoBrightnessFlat+<>c__DisplayClass23_1 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoBrightnessFlat+<DetermineBrightness>d__24 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoBrightnessFlat+<Execute>d__23 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoExposureFlat+<>c__DisplayClass24_0 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoExposureFlat+<>c__DisplayClass24_1 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoExposureFlat+<DetermineExposureTime>d__25 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.AutoExposureFlat+<Execute>d__24 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.CloseCover+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.OpenCover+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SetBrightness+<Execute>d__12 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+SkyFlatExposureDetermination (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<>c (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<>c__DisplayClass51_0 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<>c__DisplayClass52_0 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<DetermineExposureTime>d__24 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<Execute>d__23 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<TakeSkyFlats>d__51 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.ToggleLight+<Execute>d__12 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter+<>c__DisplayClass2_0 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.CloseDomeShutter+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.FindHomeDome+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.OpenDomeShutter+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.ParkDome+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Dome.SynchronizeDome+<Execute>d__10 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Autofocus.RunAutofocus+<>c__DisplayClass17_0 (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Autofocus.RunAutofocus+<Execute>d__17 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.LoopForAltitudeBase+<Interrupt>d__12 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.ExternalScript+<Execute>d__15 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.MessageBox+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForAltitude+<Execute>d__8 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForMoonAltitude+<>O (IsInterface: False, IsAbstract: True)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForMoonAltitude+<Execute>d__3 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForSunAltitude+<>O (IsInterface: False, IsAbstract: True)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitForSunAltitude+<Execute>d__3 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitLoopData+<>c (IsInterface: False, IsAbstract: False)
+  Base: System.Object
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.Utility.WaitUntilAboveHorizon+<Execute>d__11 (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+Assembly: NINA.Sequencer, Type: NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat+<>c__DisplayClass52_0+<<Dither>b__0>d (IsInterface: False, IsAbstract: False)
+  Base: System.ValueType
+
+=== Searching for type details: NINA.Sequencer.SequenceItem.Telescope.ParkScope ===
+Found Type: NINA.Sequencer.SequenceItem.Telescope.ParkScope in NINA.Sequencer (IsInterface: False)
+  Constructors:
+    new(ITelescopeMediator telescopeMediator, IGuiderMediator guiderMediator)
+  Interfaces:
+    Interface: System.ComponentModel.INotifyPropertyChanged
+    Interface: System.ComponentModel.INotifyPropertyChanging
+    Interface: NINA.Sequencer.ISequenceHasChanged
+    Interface: NINA.Sequencer.SequenceItem.ISequenceItem
+    Interface: NINA.Sequencer.ISequenceEntity
+    Interface: System.ICloneable
+    Interface: NINA.Sequencer.DragDrop.IDroppable
+    Interface: NINA.Sequencer.Validations.IValidatable
+  Custom Attributes:
+    Attribute: ExportMetadata(Name="Name", Value="Lbl_SequenceItem_Telescope_ParkScope_Name")
+    Attribute: ExportMetadata(Name="Description", Value="Lbl_SequenceItem_Telescope_ParkScope_Description")
+    Attribute: ExportMetadata(Name="Icon", Value="ParkSVG")
+    Attribute: ExportMetadata(Name="Category", Value="Lbl_SequenceCategory_Telescope")
+    Attribute: Export(ContractType=NINA.Sequencer.SequenceItem.ISequenceItem)
+    Attribute: Newtonsoft.Json.JsonObjectAttribute
+  Properties (All, including inherited):
+    IList`1 Issues (get: True, set: True)
+    ICommand AddCloneToParentCommand (get: True, set: False)
+    String Category (get: True, set: True)
+    String Description (get: True, set: True)
+    ICommand DetachCommand (get: True, set: False)
+    GeometryGroup Icon (get: True, set: True)
+    ICommand MoveDownCommand (get: True, set: False)
+    ICommand MoveUpCommand (get: True, set: False)
+    ICommand DisableEnableCommand (get: True, set: False)
+    String Name (get: True, set: True)
+    ISequenceContainer Parent (get: True, set: False)
+    InstructionErrorBehavior ErrorBehavior (get: True, set: True)
+    Int32 Attempts (get: True, set: True)
+    ICommand ResetProgressCommand (get: True, set: False)
+    Boolean ShowMenu (get: True, set: True)
+    ICommand ShowMenuCommand (get: True, set: False)
+    SequenceEntityStatus Status (get: True, set: True)
+    Boolean HasChanged (get: True, set: True)
+    Boolean HasChanged (get: True, set: True)
+    ICommand ResetProgressCommand (get: True, set: False)
+    InstructionErrorBehavior ErrorBehavior (get: True, set: True)
+    Int32 Attempts (get: True, set: True)
+    String Name (get: True, set: True)
+    String Description (get: True, set: True)
+    GeometryGroup Icon (get: True, set: True)
+    String Category (get: True, set: True)
+    SequenceEntityStatus Status (get: True, set: True)
+    ISequenceContainer Parent (get: True, set: False)
+    ICommand DetachCommand (get: True, set: False)
+    ICommand MoveUpCommand (get: True, set: False)
+    ICommand MoveDownCommand (get: True, set: False)
+    IList`1 Issues (get: True, set: False)
+  Methods (All, including inherited):
+    Object Clone()
+    Task Execute(IProgress`1 progress, CancellationToken token)
+    Boolean Validate()
+    Void AfterParentChanged()
+    String ToString()
+    Void AddCloneToParent()
+    Void AttachNewParent(ISequenceContainer newParent)
+    Void Detach()
+    TimeSpan GetEstimatedDuration()
+    Void MoveDown()
+    Void MoveUp()
+    Void ResetProgress()
+    Void ResetProgressCascaded()
+    Task Run(IProgress`1 progress, CancellationToken token)
+    Void Skip()
+    Void Initialize()
+    Void SequenceBlockInitialize()
+    Void SequenceBlockStarted()
+    Void SequenceBlockFinished()
+    Void SequenceBlockTeardown()
+    Void Teardown()
+    Void ClearHasChanged()
+    Boolean AskHasChanged(String name)
+    Type GetType()
+    Boolean Equals(Object obj)
+    Int32 GetHashCode()
+    Void ClearHasChanged()
+    Boolean AskHasChanged(String name)
+    Task Run(IProgress`1 progress, CancellationToken token)
+    Void ResetProgress()
+    Void ResetProgressCascaded()
+    Void Skip()
+    TimeSpan GetEstimatedDuration()
+    Void Initialize()
+    Void Teardown()
+    Void SequenceBlockInitialize()
+    Void SequenceBlockTeardown()
+    Void SequenceBlockStarted()
+    Void SequenceBlockFinished()
+    Object Clone()
+    Void AttachNewParent(ISequenceContainer newParent)
+    Void AfterParentChanged()
+    Void Detach()
+    Void MoveUp()
+    Void MoveDown()
+    Boolean Validate()

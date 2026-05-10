@@ -128,7 +128,7 @@
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsMountConnected}" Value="False">
+                                <DataTrigger Binding="{Binding ShowMountWarning}" Value="True">
                                     <Setter Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                             </Style.Triggers>
