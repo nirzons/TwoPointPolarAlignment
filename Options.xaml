@@ -164,6 +164,29 @@
                         </StackPanel>
                         <!-- Real Image overlay (covers placeholder once populated) -->
                         <Image Source="{Binding LastFrame}" Stretch="Uniform" />
+
+                        <!-- Visual Target Overlay (HUD for manual feedback) -->
+                        <Grid IsHitTestVisible="False" Opacity="0.55">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            
+                            <!-- Concentric HUD Rings -->
+                            <Ellipse Width="160" Height="160" Stroke="#AA00FF7F" StrokeThickness="0.7" StrokeDashArray="4,4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Ellipse Width="70" Height="70" Stroke="#FF00FF7F" StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Ellipse Width="6" Height="6" Fill="#FF00FF7F" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            
+                            <!-- Horizontal and Vertical Axis -->
+                            <Rectangle Width="1" Fill="#7700FF7F" VerticalAlignment="Stretch" HorizontalAlignment="Center" Margin="0,15" />
+                            <Rectangle Height="1" Fill="#7700FF7F" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="15,0" />
+                        </Grid>
                     </Grid>
                 </Border>
 
@@ -259,6 +282,11 @@
                             <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,0">
                                 <TextBlock Text="Plate Solve Retries" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                            </StackPanel>
+                            <!-- Rough Finder Rescue Option -->
+                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="4,0,0,0">
+                                <TextBlock Text="Rough Finder" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <CheckBox Content="Rescue Mode" IsChecked="{Binding EnableOnePointAlignment, UpdateSourceTrigger=PropertyChanged}" Foreground="#AADDAA" FontSize="10" FontWeight="SemiBold" Height="24" VerticalContentAlignment="Center" Cursor="Hand" />
                             </StackPanel>
                         </Grid>
 
