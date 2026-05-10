@@ -56,6 +56,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         PreRotateHalfRange
     }
 
+    public enum AltitudeKnobDirection {
+        UpArrow,
+        Clockwise,
+        AntiClockwise
+    }
+
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
     public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer, ITelescopeConsumer {
 
@@ -93,7 +99,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private bool blinkToggle = false;
         private double currentSimulationOffset = 0.0;
         private bool enableOnePointAlignment = false;
+        private bool isAltitudePriority = false;
+        private bool isAzimuthPriority = false;
         private bool hasRoughFinderSimTriggered = false;
+        private AltitudeKnobDirection altKnobDirection = AltitudeKnobDirection.UpArrow;
+        private bool isBlindSolvingActive = false;
 
         private readonly ICameraMediator cameraMediator;
         private readonly ITelescopeMediator telescopeMediator;
@@ -306,6 +316,28 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
+        public AltitudeKnobDirection AltKnobDirection {
+            get => altKnobDirection;
+            set {
+                altKnobDirection = value;
+                RaisePropertyChanged(nameof(AltKnobDirection));
+                SaveSettings();
+                
+                // Force re-render of current guidance strings if loop is running
+                if (calculatedPolarAxis.X != 0 || calculatedPolarAxis.Y != 0 || calculatedPolarAxis.Z != 0) {
+                    UpdateErrorViewFromPolarAxis(calculatedPolarAxis, lastFrame == null ? 0 : recordedRA);
+                }
+            }
+        }
+
+        public bool IsBlindSolvingActive {
+            get => isBlindSolvingActive;
+            set {
+                isBlindSolvingActive = value;
+                RaisePropertyChanged(nameof(IsBlindSolvingActive));
+            }
+        }
+
         public string Binning {
             get => binning;
             set {
@@ -395,6 +427,22 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 totalErrorRatingColor = value;
                 RaisePropertyChanged(nameof(TotalErrorRatingColor));
+            }
+        }
+
+        public bool IsAltitudePriority {
+            get => isAltitudePriority;
+            set {
+                isAltitudePriority = value;
+                RaisePropertyChanged(nameof(IsAltitudePriority));
+            }
+        }
+
+        public bool IsAzimuthPriority {
+            get => isAzimuthPriority;
+            set {
+                isAzimuthPriority = value;
+                RaisePropertyChanged(nameof(IsAzimuthPriority));
             }
         }
 
@@ -1894,7 +1942,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             var profile = profileService.ActiveProfile;
             var ps = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
             IPlateSolver solver = plateSolverFactory.GetPlateSolver(ps);
-            ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, null, imagingMediator, filterWheelMediator);
+            IPlateSolver blindSolver = plateSolverFactory.GetBlindSolver(ps);
+            ICaptureSolver captureSolver = plateSolverFactory.GetCaptureSolver(solver, blindSolver, imagingMediator, filterWheelMediator);
 
             int simStep = 0;
             while (IsRunning) {
@@ -1909,6 +1958,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     var p = telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, sDec, Epoch.JNOW, Coordinates.RAType.Hours);
                     res = new PlateSolveResult { Success = true, Coordinates = new Coordinates(p.RA, sDec, Epoch.JNOW, Coordinates.RAType.Hours) };
                 } else {
+                    var currentPosition = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
                     CaptureSolverParameter solverParam = new CaptureSolverParameter {
                         Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(1),
                         FocalLength = profile.TelescopeSettings.FocalLength,
@@ -1916,13 +1966,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         Binning = binVal,
                         SearchRadius = 30.0, // Wide radius override per roadmap
                         Regions = 5000.0, MaxObjects = 500,
+                        Coordinates = currentPosition,
                         BlindFailoverEnabled = true, // Blind failover override per roadmap
                         DisableNotifications = true
                     };
                     var prog = new Progress<PlateSolveProgress>(p => { if (p.Thumbnail != null) System.Windows.Application.Current.Dispatcher.Invoke(() => { LastFrame = p.Thumbnail; }); });
+                    var appStatusProg = new Progress<ApplicationStatus>(s => {
+                        if (s.Status != null && (
+                            s.Status.Contains("Blind", StringComparison.OrdinalIgnoreCase) || 
+                            s.Status.Contains("Astrometry", StringComparison.OrdinalIgnoreCase) || 
+                            s.Status.Contains("All Sky", StringComparison.OrdinalIgnoreCase) ||
+                            s.Status.Contains("AllSky", StringComparison.OrdinalIgnoreCase))) {
+                            System.Windows.Application.Current.Dispatcher.Invoke(() => { IsBlindSolvingActive = true; });
+                        }
+                    });
                     try {
-                        res = await captureSolver.Solve(seq, solverParam, prog, new Progress<ApplicationStatus>(), alignmentCts?.Token ?? CancellationToken.None);
-                    } catch { }
+                        res = await captureSolver.Solve(seq, solverParam, prog, appStatusProg, alignmentCts?.Token ?? CancellationToken.None);
+                    } catch { } finally {
+                        System.Windows.Application.Current.Dispatcher.Invoke(() => { IsBlindSolvingActive = false; });
+                    }
                 }
 
                 if (res != null && res.Success) {
@@ -2096,6 +2158,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             TotalErrorValue = Math.Sqrt(altErrorArcmin * altErrorArcmin + azErrorArcmin * azErrorArcmin);
             TotalError = FormatTotalError(TotalErrorValue);
 
+            // Determine which axis is the major contributor to error (Priority Highlight)
+            // Ignore tie-breaking if absolute error is practically aligned (< 0.2')
+            double absAlt = Math.Abs(altErrorArcmin);
+            double absAz = Math.Abs(azErrorArcmin);
+            
+            if (TotalErrorValue < 0.5) {
+                IsAltitudePriority = false;
+                IsAzimuthPriority = false;
+            } else if (absAlt > absAz + 0.1) {
+                IsAltitudePriority = true;
+                IsAzimuthPriority = false;
+            } else if (absAz > absAlt + 0.1) {
+                IsAltitudePriority = false;
+                IsAzimuthPriority = true;
+            } else {
+                IsAltitudePriority = false;
+                IsAzimuthPriority = false;
+            }
+
             // Derive directional instructions and ratings
             bool isNorthern = latitude >= 0;
             if (azErrorArcmin > 0) {
@@ -2107,9 +2188,23 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
 
             if (altErrorArcmin > 0) {
-                AltitudeInstruction = "Move Down ↓";
+                // Standard "Down" direction
+                if (AltKnobDirection == AltitudeKnobDirection.UpArrow) {
+                    AltitudeInstruction = "Move Down ↓";
+                } else if (AltKnobDirection == AltitudeKnobDirection.Clockwise) {
+                    AltitudeInstruction = "Move Down ↺";
+                } else {
+                    AltitudeInstruction = "Move Down ↻";
+                }
             } else if (altErrorArcmin < 0) {
-                AltitudeInstruction = "Move Up ↑";
+                // Standard "Up" direction
+                if (AltKnobDirection == AltitudeKnobDirection.UpArrow) {
+                    AltitudeInstruction = "Move Up ↑";
+                } else if (AltKnobDirection == AltitudeKnobDirection.Clockwise) {
+                    AltitudeInstruction = "Move Up ↻";
+                } else {
+                    AltitudeInstruction = "Move Up ↺";
+                }
             } else {
                 AltitudeInstruction = "Aligned";
             }
@@ -2315,7 +2410,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     Offset = Offset,
                     TelescopeMoveRate = TelescopeMoveRate,
                     PlateSolveRetries = PlateSolveRetries,
-                    EnableOnePointAlignment = EnableOnePointAlignment
+                    EnableOnePointAlignment = EnableOnePointAlignment,
+                    AltKnobDirection = AltKnobDirection
                 };
                 
                 if (profileService != null) {
@@ -2370,6 +2466,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                             RaisePropertyChanged(nameof(PlateSolveRetries));
                             enableOnePointAlignment = settingsObj.EnableOnePointAlignment;
                             RaisePropertyChanged(nameof(EnableOnePointAlignment));
+                            altKnobDirection = settingsObj.AltKnobDirection;
+                            RaisePropertyChanged(nameof(AltKnobDirection));
                         }
                     }
                 }
@@ -2391,6 +2489,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             public double TelescopeMoveRate { get; set; } = 3.0;
             public int PlateSolveRetries { get; set; } = 3;
             public bool EnableOnePointAlignment { get; set; } = false;
+            public AltitudeKnobDirection AltKnobDirection { get; set; } = AltitudeKnobDirection.UpArrow;
         }
     }
 }

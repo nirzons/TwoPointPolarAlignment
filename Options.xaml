@@ -24,6 +24,12 @@
         </ObjectDataProvider.MethodParameters>
     </ObjectDataProvider>
 
+    <ObjectDataProvider x:Key="AltKnobDirectionValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+        <ObjectDataProvider.MethodParameters>
+            <x:Type TypeName="local:AltitudeKnobDirection"/>
+        </ObjectDataProvider.MethodParameters>
+    </ObjectDataProvider>
+
     <!-- Static Arrays for Binning and Filters -->
     <x:Array x:Key="BinningValues" Type="{x:Type sys:String}">
         <sys:String>1x1</sys:String>
@@ -98,6 +104,28 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="🔄" Foreground="#22C55E" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="1" Text="Reversed Flow Active - Running internally in opposite direction from current position." Foreground="#4ADE80" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- Blind Solver Warning Banner -->
+                <Border CornerRadius="4" Background="#3D2A14" BorderThickness="1" BorderBrush="#F59E0B" Padding="10,6" Margin="0,0,0,6">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsBlindSolvingActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="📡" Foreground="#F59E0B" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="Blind Solver Engaged: Standby while the backup all-sky engine identifies the field..." Foreground="#FBBF24" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </Grid>
                 </Border>
 
@@ -195,18 +223,72 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <Grid>
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" /> <!-- Action Buttons NOW AT TOP -->
                                 <RowDefinition Height="Auto" /> <!-- Config Header -->
                                 <RowDefinition Height="Auto" /> <!-- Inputs Grid -->
-                                <RowDefinition Height="Auto" /> <!-- Button -->
                                 <RowDefinition Height="*" MinHeight="100" />    <!-- Logs ScrollViewer -->
                             </Grid.RowDefinitions>
 
-                        <!-- Config Header -->
-                        <TextBlock Grid.Row="0" Text="Alignment Settings" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" Margin="0,0,0,8" />
-
-                        <!-- Inputs Grid -->
-                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <!-- 1. Action Buttons Grid (Moved to the Top) -->
+                        <Grid Grid.Row="0" Margin="0,0,0,12">
+                            <Grid.Resources>
+                                <Style x:Key="ActionButtonStyle" TargetType="Button">
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="buttonBorder" Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0">
+                                                    <Grid>
+                                                        <Border x:Name="hoverGlow" Background="White" Opacity="0" CornerRadius="6"/>
+                                                        <ContentPresenter x:Name="content" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                                                    </Grid>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="hoverGlow" Property="Opacity" Value="0.18"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="hoverGlow" Property="Background" Value="Black"/>
+                                                        <Setter TargetName="hoverGlow" Property="Opacity" Value="0.2"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter TargetName="buttonBorder" Property="Background" Value="#353540"/>
+                                                        <Setter TargetName="content" Property="Opacity" Value="0.5"/>
+                                                        <Setter Property="Cursor" Value="Arrow"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Grid.Resources>
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <!-- Start Button -->
+                            <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource ActionButtonStyle}" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="38" IsEnabled="{Binding CanStart}" Background="#22C55E" Margin="0,0,0,8" FontSize="14" />
+                            
+                            <!-- Stop Button -->
+                            <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource ActionButtonStyle}" Content="STOP" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Margin="0,0,4,0" />
+                            
+                            <!-- Home Button -->
+                            <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource ActionButtonStyle}" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#3B82F6" Margin="4,0,0,0" />
+                        </Grid>
+
+                        <!-- 2. Config Header -->
+                        <TextBlock Grid.Row="1" Text="Alignment Settings" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" Margin="0,0,0,8" />
+
+                        <!-- 3. Inputs Grid -->
+                        <Grid Grid.Row="2" Margin="0,0,0,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -273,75 +355,29 @@
                             </StackPanel>
 
                             <!-- Telescope Move Rate -->
-                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,0">
+                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Telescope Move Rate (°/s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding TelescopeMoveRate, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
 
                             <!-- Plate Solve Retries -->
-                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,0">
+                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Plate Solve Retries" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
                             <!-- Rough Finder Rescue Option -->
-                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="4,0,0,0">
+                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="4,0,0,6">
                                 <TextBlock Text="Rough Finder" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <CheckBox Content="Rescue Mode" IsChecked="{Binding EnableOnePointAlignment, UpdateSourceTrigger=PropertyChanged}" Foreground="#AADDAA" FontSize="10" FontWeight="SemiBold" Height="24" VerticalContentAlignment="Center" Cursor="Hand" />
                             </StackPanel>
+                            
+                            <!-- Alt Knob Visualization (NEW ROW 4) -->
+                            <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,4,0">
+                                <TextBlock Text="Altitude Knob Turn Visualization" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Source={StaticResource AltKnobDirectionValues}}" SelectedItem="{Binding AltKnobDirection}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                            </StackPanel>
                         </Grid>
 
-                        <!-- Buttons Row -->
-                        <Grid Grid.Row="2" Margin="0,4,0,8">
-                            <Grid.Resources>
-                                <Style x:Key="ActionButtonStyle" TargetType="Button">
-                                    <Setter Property="Foreground" Value="White"/>
-                                    <Setter Property="FontWeight" Value="Bold"/>
-                                    <Setter Property="Cursor" Value="Hand"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border x:Name="buttonBorder" Background="{TemplateBinding Background}" CornerRadius="6" BorderThickness="0">
-                                                    <Grid>
-                                                        <Border x:Name="hoverGlow" Background="White" Opacity="0" CornerRadius="6"/>
-                                                        <ContentPresenter x:Name="content" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
-                                                    </Grid>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="hoverGlow" Property="Opacity" Value="0.18"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsPressed" Value="True">
-                                                        <Setter TargetName="hoverGlow" Property="Background" Value="Black"/>
-                                                        <Setter TargetName="hoverGlow" Property="Opacity" Value="0.2"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsEnabled" Value="False">
-                                                        <Setter TargetName="buttonBorder" Property="Background" Value="#353540"/>
-                                                        <Setter TargetName="content" Property="Opacity" Value="0.5"/>
-                                                        <Setter Property="Cursor" Value="Arrow"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Grid.Resources>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <!-- Start Button -->
-                            <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource ActionButtonStyle}" Content="Start Alignment Sequence" Command="{Binding StartAlignmentCommand}" Height="34" IsEnabled="{Binding CanStart}" Background="#22C55E" Margin="0,0,0,6" />
-                            
-                            <!-- Stop Button -->
-                            <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource ActionButtonStyle}" Content="Stop" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Margin="0,0,3,0" />
-                            
-                            <!-- Home Button -->
-                            <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource ActionButtonStyle}" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#22C55E" Margin="3,0,0,0" />
-                        </Grid>
 
                         <!-- Log Console -->
                         <Border Grid.Row="3" CornerRadius="4" Background="#111115" BorderThickness="1" BorderBrush="#222228" Padding="8" Margin="0,4,0,8">
@@ -366,19 +402,75 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Azimuth Card -->
-                <Border Grid.Column="0" CornerRadius="8" Background="#1A1A20" BorderThickness="1" BorderBrush="#2D2D35" Padding="15" Margin="0,0,10,0">
+                <Border Grid.Column="0" CornerRadius="8" Padding="15" Margin="0,0,10,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#1A1A20"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="BorderBrush" Value="#2D2D35"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAzimuthPriority}" Value="True">
+                                    <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                    <Setter Property="Background" Value="#201C18"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="AZIMUTH ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding AzimuthError}" FontSize="16" FontWeight="SemiBold" Foreground="#72BDFF" Margin="0,5,0,5" HorizontalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,5">
+                            <TextBlock Text="⚠ " Foreground="#FBBF24" FontSize="12" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAzimuthPriority}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="AZIMUTH ERROR" FontSize="11" Foreground="Gray" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding AzimuthError}" FontSize="16" FontWeight="SemiBold" Foreground="#72BDFF" Margin="0,0,0,5" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding AzimuthInstruction}" FontSize="24" FontWeight="Bold" Foreground="#72BDFF" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
 
                 <!-- Altitude Card -->
-                <Border Grid.Column="1" CornerRadius="8" Background="#1A1A20" BorderThickness="1" BorderBrush="#2D2D35" Padding="15" Margin="0,0,10,0">
+                <Border Grid.Column="1" CornerRadius="8" Padding="15" Margin="0,0,10,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#1A1A20"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="BorderBrush" Value="#2D2D35"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAltitudePriority}" Value="True">
+                                    <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                    <Setter Property="Background" Value="#201C18"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="ALTITUDE ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding AltitudeError}" FontSize="16" FontWeight="SemiBold" Foreground="#FFE79A" Margin="0,5,0,5" HorizontalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,5">
+                            <TextBlock Text="⚠ " Foreground="#FBBF24" FontSize="12" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAltitudePriority}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="ALTITUDE ERROR" FontSize="11" Foreground="Gray" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding AltitudeError}" FontSize="16" FontWeight="SemiBold" Foreground="#FFE79A" Margin="0,0,0,5" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding AltitudeInstruction}" FontSize="24" FontWeight="Bold" Foreground="#FFE79A" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
