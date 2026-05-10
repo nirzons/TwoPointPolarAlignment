@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![NINA Version](https://img.shields.io/badge/N.I.N.A.-3.1%2B-blue.svg)](https://nighttime-imaging.eu/)
-[![Stability](https://img.shields.io/badge/Stability-Beta%201.0-orange.svg)](#)
+[![Stability](https://img.shields.io/badge/Stability-v1.0%20Stable-green.svg)](#)
 
 A premium, lightweight, and highly accurate polar alignment plugin for **N.I.N.A. (Nighttime Imaging 'N' Astronomy)**. 
 
@@ -16,8 +16,10 @@ Achieve precision polar alignment within minutes using a rock-solid 3D rotation 
 - **Stabilized 3D Solver**: Employs advanced 3D rotation matrix mathematics hardened against Earth's rotation drift, achieving direct mathematical parity with industry benchmark benchmarks.
 - **Global Compatibility**: Full native support for both Northern AND Southern Hemispheres, with directionally intuitive control prompts automatically adapted to your location.
 - **Premium Glassmorphic UI**: Sleek, high-visibility dark-mode interface featuring real-time visual status cards, dynamic hover effects, and intuitive large-scale alignment typography.
-- **Instant Awareness**: Event-driven equipment monitoring system ensures zero-latency detection of camera and mount connectivity.
-- **Profile Native**: Seamlessly integrates into N.I.N.A.'s native profiles system—automatically backing up and reloading your setup configurations per-rig.
+- **Adaptive Priority Highlighting**: Intelligently monitors absolute variance and applies dynamic golden glow accents to whichever axis requires immediate corrective priority.
+- **Rough Finder Rescue Engine**: Hardened localized failsafe mode leveraging secondary Blind Solvers (Astrometry.net) to dynamically recover your position through extreme initial misalignments.
+- **Custom Mechanical Logic**: Adapt instruction outputs directly to your hardware. Features selectable 'Altitude Knob Turn Visualization' mapping linear movements seamlessly to rotational symbols (↻ / ↺).
+- **Profile Native**: Seamlessly integrates into N.I.N.A.'s native profiles system—automatically backing up and reloading setup configurations, filter choices, and knob preferences per-rig.
 
 ---
 
@@ -31,9 +33,11 @@ Follow these simple steps to align your mount:
 3. Ensure your mount is unparked and at its Home position.
 
 ### 2. Configure Settings
-- **Exposure & Gain**: Set values that allow your plate solver to reliable detect stars in < 5 seconds.
+- **Exposure & Gain**: Set values that allow your plate solver to reliably detect stars in < 5 seconds.
 - **Rotation Direction**: Set to "East" by default (or "West" depending on meridian clearance).
 - **Rotation Method**: Choose **Automatic** (recommended) for computerized mounts, or **Manual** for push-to trackers.
+- **Rough Finder**: Enable this checkbox to active fully-automated backup Blind Solving rescue if your initial deployment error exceeds normal solver capabilities!
+- **Alt Knob Visual**: Match the UI arrows to your specific mechanical gearing: standard, clockwise, or counter-clockwise icons.
 
 ### 3. The Alignment Cycle
 1. Press **[Start Alignment Sequence]**.
