@@ -17,7 +17,10 @@ Achieve precision polar alignment within minutes using a rock-solid 3D rotation 
 - **Global Compatibility**: Full native support for both Northern AND Southern Hemispheres, with directionally intuitive control prompts automatically adapted to your location.
 - **Premium Glassmorphic UI**: Sleek, high-visibility dark-mode interface featuring real-time visual status cards, dynamic hover effects, and intuitive large-scale alignment typography.
 - **Adaptive Priority Highlighting**: Intelligently monitors absolute variance and applies dynamic golden glow accents to whichever axis requires immediate corrective priority.
+- **Real-Time Visual Dashboard**: Features a dedicated, high-frequency feedback widget instantly broadcasting mechanical states (Slewing, Solving, Success, Failure) for true operational awareness.
+- **Live Confidence Tracking**: Deep-wired data validation loop that instantly flags onscreen number reliability using active red/green solver alerts—guaranteeing your physical tweaks are always synchronized.
 - **Rough Finder Rescue Engine**: Hardened localized failsafe mode leveraging secondary Blind Solvers (Astrometry.net) to dynamically recover your position through extreme initial misalignments.
+- **Adversarial Thread Hardening**: Core logic contains multi-layer architectural fortification ensuring comprehensive thread atomicity, secure cancellation hygiene, and atomic lifecycle disposal hooks.
 - **Custom Mechanical Logic**: Adapt instruction outputs directly to your hardware. Features selectable 'Altitude Knob Turn Visualization' mapping linear movements seamlessly to rotational symbols (↻ / ↺).
 - **Profile Native**: Seamlessly integrates into N.I.N.A.'s native profiles system—automatically backing up and reloading setup configurations, filter choices, and knob preferences per-rig.
 

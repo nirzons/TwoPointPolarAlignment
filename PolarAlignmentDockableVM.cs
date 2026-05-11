@@ -104,6 +104,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private bool hasRoughFinderSimTriggered = false;
         private AltitudeKnobDirection altKnobDirection = AltitudeKnobDirection.UpArrow;
         private bool isBlindSolvingActive = false;
+        private string statusIndicatorText = "Ready to Start";
+        private Brush statusIndicatorColor = StatusIdleColor;
 
         private readonly ICameraMediator cameraMediator;
         private readonly ITelescopeMediator telescopeMediator;
@@ -129,6 +131,28 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private Coordinates coordinates2;
         private double angle2;
         private double lstMeasurement2;
+
+        private static Brush CreateFrozenBrush(string hex) {
+            try {
+                var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+                b.Freeze();
+                return b;
+            } catch { return Brushes.SkyBlue; }
+        }
+        
+        private static readonly Brush StatusIdleColor = CreateFrozenBrush("#72BDFF");
+        private static readonly Brush StatusWarningColor = CreateFrozenBrush("#FBBF24");
+        private static readonly Brush StatusSuccessColor = CreateFrozenBrush("#22C55E");
+        private static readonly Brush StatusFailureColor = CreateFrozenBrush("#EF4444");
+        private static readonly Brush StatusProgressColor = CreateFrozenBrush("#6366F1");
+        private static readonly Brush StatusTrackingColor = CreateFrozenBrush("#A855F7");
+
+        private void SetStatus(string text, Brush color) {
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => {
+                StatusIndicatorText = text;
+                StatusIndicatorColor = color;
+            }));
+        }
 
         [ImportingConstructor]
         public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator, IPlateSolverFactory plateSolverFactory, IImagingMediator imagingMediator, IFilterWheelMediator filterWheelMediator) : base(profileService) {
@@ -441,6 +465,22 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
+        public string StatusIndicatorText {
+            get => statusIndicatorText;
+            set {
+                statusIndicatorText = value;
+                RaisePropertyChanged(nameof(StatusIndicatorText));
+            }
+        }
+
+        public Brush StatusIndicatorColor {
+            get => statusIndicatorColor;
+            set {
+                statusIndicatorColor = value;
+                RaisePropertyChanged(nameof(StatusIndicatorColor));
+            }
+        }
+
         public bool IsAltitudePriority {
             get => isAltitudePriority;
             set {
@@ -551,6 +591,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 isTaskExecuting = true;
                 RaisePropertyChanged(nameof(CanStart));
                 Task.Run(async () => {
+                    SetStatus("Homing", StatusWarningColor);
                     try {
                         if (homePosition != null) {
                             Log($"Slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString}) as requested by HOME button...");
@@ -565,6 +606,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     } catch (Exception ex) {
                         Log($"[Error] Failed to complete Home directive: {ex.Message}");
                     } finally {
+                        SetStatus("Ready to Start", StatusIdleColor);
                         isTaskExecuting = false;
                         RaisePropertyChanged(nameof(CanStart));
                     }
@@ -1380,6 +1422,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             if (activePreRotate) {
                 double offsetDegrees = RotationAmount / 2.0;
                 double offsetHours = offsetDegrees / 15.0;
+                SetStatus("Slewing (Pre-rotate)", StatusWarningColor);
                 Log($"Pre-rotating RA by {offsetDegrees:F1}° in the opposite direction of {activeDirection}...");
 
                 double targetRA = currentPosition.RA + (activeDirection == RotationDirection.East ? -offsetHours : offsetHours);
@@ -1420,6 +1463,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
                 // 2. Camera Exposure and Plate Solving
                 Log("Capturing starting image and solving...");
+                SetStatus("Solving Point 1...", StatusProgressColor);
                 result = null; // reset for attempt loop
                 for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                     if (!IsRunning) throw new OperationCanceledException("Alignment sequence was stopped by user.");
@@ -1510,6 +1554,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
 
                 if (phaseCFailed) {
+                    SetStatus("Could not solve", StatusFailureColor);
                     if (await AttemptRescueIfNeeded(failureReason, token)) {
                         Log("Rough Finder Rescue cycle completed successfully. Sequence halted per operator feedback so user can initialize final high-precision run manually.");
                         return; // Do not auto-continue; stop cycle gracefully.
@@ -1519,6 +1564,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
 
                 Log($"Solved initial coordinates successfully: RA {coordinates1.RAString}, Dec {coordinates1.DecString}, Orientation Angle: {angle1:F2}°");
+                SetStatus("Solved", StatusSuccessColor);
 
                 // Safety check: verify solved coordinates are not too far from the mount's physical position
                 var physicalPos1 = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
@@ -1587,6 +1633,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 });
                 Log($"Manual rotation tracking concluded. Recorded simulation baseline: {currentSimulationOffset:F1}°");
             } else {
+                SetStatus("Slewing", StatusWarningColor);
                 Log($"Automatically slewing RA axis by {RotationAmount:F1}° {activeDirection} to theoretical target RA {rotTargetCoords.RAString}...");
                 await telescopeMediator.SlewToCoordinatesAsync(rotTargetCoords, token);
                 try { telescopeMediator.SetTrackingEnabled(false); } catch { }
@@ -1597,6 +1644,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
             // ==================== PHASE E: Second Measurement ====================
             Log("Initiating Phase E (Second Measurement)...");
+            SetStatus("Solving Point 2...", StatusProgressColor);
 
             result = null;
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -1682,6 +1730,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
 
             if (result == null || !result.Success) {
+                SetStatus("Could not solve", StatusFailureColor);
                 throw new InvalidOperationException($"Second plate solve failed after {maxAttempts} consecutive attempts. Ensure exposure settings are correct, focus is good, and stars are visible.");
             }
 
@@ -1691,6 +1740,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             if (lstMeasurement2 == 0.0) lstMeasurement2 = coordinates2.RA;
 
             Log($"Solved second coordinates successfully: RA {coordinates2.RAString}, Dec {coordinates2.DecString}, Orientation Angle: {angle2:F2}°");
+            SetStatus("Solved", StatusSuccessColor);
 
             // Safety check: verify second solved coordinates are not too far from the mount's physical position
             var physicalPos2 = IsMountConnected ? telescopeMediator.GetCurrentPosition() : null;
@@ -1855,9 +1905,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
 
                 if (liveResult != null && liveResult.Success) {
+                    SetStatus("Solved", StatusSuccessColor);
                     // Update calculation using new coordinates
                     CalculateErrors(coordinates1, angle1, liveResult.Coordinates, liveResult.PositionAngle, isInitial: false);
                 } else {
+                    SetStatus("Could not solve", StatusFailureColor);
                     Log("Could not solve live frame. Retrying on next loop...");
                 }
 
@@ -1886,6 +1938,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                             double raDiff = Math.Abs(currentPos.RA - homePosition.RA);
                             if (raDiff > 12.0) raDiff = 24.0 - raDiff;
                             if (raDiff > 0.05 || Math.Abs(currentPos.Dec - homePosition.Dec) > 0.05) {
+                                SetStatus("Homing", StatusWarningColor);
                                 Log($"Slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString}) as requested by HOME button...");
                                 await telescopeMediator.SlewToCoordinatesAsync(homePosition, System.Threading.CancellationToken.None);
                                 try { telescopeMediator.SetTrackingEnabled(false); } catch { }
@@ -1896,6 +1949,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Failed to return to home position: {ex.Message}");
                     }
                 }
+                SetStatus("Ready to Start", StatusIdleColor);
             }
         }
 
@@ -1951,6 +2005,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private async Task RunRoughFinderEngineAsync(CancellationToken rescueToken) {
+            SetStatus("Rescue Engine Tracking", StatusProgressColor);
             Log("Initializing Rough Finder Rescue Engine Loop...");
             Notification.ShowSuccess("Rough Finder Rescue Engaged. Watch live telemetry to reach center target zone.");
             

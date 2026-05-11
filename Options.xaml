@@ -79,8 +79,8 @@
                             <TextBlock Text="2-Point Polar Alignment" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" />
                             <TextBlock Text="Align your mount with high precision using two plate-solved points." FontSize="12" Foreground="Gray" Margin="0,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
-                        <Border Grid.Column="1" CornerRadius="4" Background="#1D2A3A" Padding="8,4" VerticalAlignment="Center">
-                            <TextBlock Text="Ready to Start" FontWeight="Bold" Foreground="#72BDFF" FontSize="11" />
+                        <Border Grid.Column="1" CornerRadius="4" Background="#1A2230" BorderThickness="1" BorderBrush="{Binding StatusIndicatorColor}" Padding="8,4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding StatusIndicatorText}" FontWeight="Bold" Foreground="{Binding StatusIndicatorColor}" FontSize="11" />
                         </Border>
                     </Grid>
                 </Border>
