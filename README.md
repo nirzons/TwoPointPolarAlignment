@@ -56,7 +56,7 @@ Follow these simple steps to align your mount:
 
 Until we integrate into the official N.I.N.A. Plugin Store, you can install this beta manually:
 
-1. Download the latest Release zip file from the [GitHub Releases section](#).
+1. Download the latest Release zip file from the [GitHub Releases section](https://github.com/nirzons/TwoPointPolarAlignment/releases).
 2. Close N.I.N.A if it is currently running.
 3. Navigate to your Local Plugins directory:
    `%LocalAppData%\NINA\Plugins\3.0.0\` (or your target N.I.N.A major version folder)
