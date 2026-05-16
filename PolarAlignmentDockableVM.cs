@@ -602,341 +602,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] {message}");
         }
 
-        private void ShowManualRotationDialog(double targetDegrees, RotationDirection direction, Coordinates initialCoords, CaptureSequence sequence, ICaptureSolver captureSolver, bool isSimulation) {
-            var dialog = new System.Windows.Window {
-                Title = "Manual RA Rotation Live Tracking",
-                Width = 500,
-                Height = 420,
-                WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
-                ResizeMode = System.Windows.ResizeMode.NoResize,
-                WindowStyle = System.Windows.WindowStyle.None,
-                AllowsTransparency = true,
-                Background = System.Windows.Media.Brushes.Transparent,
-                Topmost = true,
-                ShowInTaskbar = false
-            };
-
-            try {
-                dialog.Owner = System.Windows.Application.Current.MainWindow;
-            } catch { }
-
-            // Main container with drop shadow
-            var mainBorder = new System.Windows.Controls.Border {
-                Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x22)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3D, 0x3D, 0x50)),
-                BorderThickness = new System.Windows.Thickness(1),
-                CornerRadius = new System.Windows.CornerRadius(12),
-                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 30, ShadowDepth = 0, Opacity = 0.6 }
-            };
-
-            var grid = new System.Windows.Controls.Grid();
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(45) }); // Header
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // Main Body
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // Sim Bar
-
-            // 1. Header
-            var header = new System.Windows.Controls.Border {
-                Background = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)),
-                CornerRadius = new System.Windows.CornerRadius(12, 12, 0, 0),
-                Padding = new System.Windows.Thickness(20, 0, 20, 0)
-            };
-            var headerTxt = new System.Windows.Controls.TextBlock {
-                Text = "⟳  Manual RA Rotation — Live Tracking",
-                VerticalAlignment = System.Windows.VerticalAlignment.Center,
-                FontSize = 16,
-                FontWeight = System.Windows.FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.White
-            };
-            header.Child = headerTxt;
-            System.Windows.Controls.Grid.SetRow(header, 0);
-            grid.Children.Add(header);
-
-            // 2. Content Body
-            var bodyStack = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(25, 20, 25, 15) };
-
-            var instrText = new System.Windows.Controls.TextBlock {
-                Text = $"Rotate the mount {direction} to the target angle. Tighten clutches, then click Finish.",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-                TextAlignment = System.Windows.TextAlignment.Center,
-                TextWrapping = System.Windows.TextWrapping.Wrap,
-                Margin = new System.Windows.Thickness(0, 0, 0, 15)
-            };
-            bodyStack.Children.Add(instrText);
-
-            // Rotation Status Plate
-            var statusPlate = new System.Windows.Controls.Border {
-                Background = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x18)),
-                CornerRadius = new System.Windows.CornerRadius(8),
-                Padding = new System.Windows.Thickness(15),
-                BorderThickness = new System.Windows.Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x36)),
-                Margin = new System.Windows.Thickness(0, 0, 0, 20)
-            };
-            var statusStack = new System.Windows.Controls.StackPanel();
-
-            var currentAnglePanel = new System.Windows.Controls.StackPanel { 
-                Orientation = System.Windows.Controls.Orientation.Horizontal, 
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center 
-            };
-            var curAngleTxt = new System.Windows.Controls.TextBlock {
-                Text = "0.0°",
-                FontSize = 42,
-                FontWeight = System.Windows.FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x4C, 0x4C)) // Start Red
-            };
-            var targetAngleTxt = new System.Windows.Controls.TextBlock {
-                Text = $" / {targetDegrees:F1}°",
-                FontSize = 24,
-                FontWeight = System.Windows.FontWeights.SemiBold,
-                Foreground = System.Windows.Media.Brushes.Gray,
-                VerticalAlignment = System.Windows.VerticalAlignment.Bottom,
-                Margin = new System.Windows.Thickness(5, 0, 0, 8)
-            };
-            currentAnglePanel.Children.Add(curAngleTxt);
-            currentAnglePanel.Children.Add(targetAngleTxt);
-            statusStack.Children.Add(currentAnglePanel);
-
-            var liveStatusTxt = new System.Windows.Controls.TextBlock {
-                Text = "Waiting for first capture...",
-                FontSize = 11,
-                FontStyle = System.Windows.FontStyles.Italic,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x99)),
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                Margin = new System.Windows.Thickness(0, 5, 0, 10)
-            };
-            statusStack.Children.Add(liveStatusTxt);
-
-            var progressBar = new System.Windows.Controls.ProgressBar {
-                Height = 10,
-                Minimum = 0,
-                Maximum = targetDegrees,
-                Value = 0,
-                Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x28)),
-                BorderThickness = new System.Windows.Thickness(0),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x4C, 0x4C))
-            };
-            statusStack.Children.Add(progressBar);
-            statusPlate.Child = statusStack;
-            bodyStack.Children.Add(statusPlate);
-
-            // Finish Button
-            var finishButton = new System.Windows.Controls.Button {
-                Content = "Finish — Clutches Locked",
-                Height = 45,
-                FontSize = 16,
-                FontWeight = System.Windows.FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.White,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-
-            // Re-use premium button template logic
-            var btnTemplate = new System.Windows.Controls.ControlTemplate(typeof(System.Windows.Controls.Button));
-            var btnBdr = new System.Windows.FrameworkElementFactory(typeof(System.Windows.Controls.Border));
-            btnBdr.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new System.Windows.CornerRadius(6));
-            btnBdr.SetValue(System.Windows.Controls.Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)));
-            btnBdr.Name = "pnlBdr";
-            var gridFact = new System.Windows.FrameworkElementFactory(typeof(System.Windows.Controls.Grid));
-            var glowFact = new System.Windows.FrameworkElementFactory(typeof(System.Windows.Controls.Border));
-            glowFact.SetValue(System.Windows.Controls.Border.BackgroundProperty, System.Windows.Media.Brushes.White);
-            glowFact.SetValue(System.Windows.UIElement.OpacityProperty, 0.0);
-            glowFact.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new System.Windows.CornerRadius(6));
-            glowFact.Name = "glow";
-            var cpFact = new System.Windows.FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
-            cpFact.SetValue(System.Windows.FrameworkElement.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
-            cpFact.SetValue(System.Windows.FrameworkElement.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
-            gridFact.AppendChild(glowFact);
-            gridFact.AppendChild(cpFact);
-            btnBdr.AppendChild(gridFact);
-            btnTemplate.VisualTree = btnBdr;
-            var hTrig = new System.Windows.Trigger { Property = System.Windows.UIElement.IsMouseOverProperty, Value = true };
-            hTrig.Setters.Add(new System.Windows.Setter(System.Windows.UIElement.OpacityProperty, 0.15, "glow"));
-            btnTemplate.Triggers.Add(hTrig);
-            finishButton.Template = btnTemplate;
-            finishButton.Click += (s, e) => dialog.DialogResult = true;
-            bodyStack.Children.Add(finishButton);
-
-            System.Windows.Controls.Grid.SetRow(bodyStack, 1);
-            grid.Children.Add(bodyStack);
-
-            // 3. Simulation Tool Bar
-            if (isSimulation) {
-                var simBar = new System.Windows.Controls.Border {
-                    Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x1A, 0x1A)),
-                    Padding = new System.Windows.Thickness(10, 8, 10, 8),
-                    CornerRadius = new System.Windows.CornerRadius(0, 0, 12, 12),
-                    BorderThickness = new System.Windows.Thickness(0, 1, 0, 0),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x20, 0x20))
-                };
-                var simGrid = new System.Windows.Controls.Grid();
-                simGrid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
-                simGrid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
-                
-                var simLabel = new System.Windows.Controls.TextBlock {
-                    Text = "⚙️ SIMULATION DEBUG PANEL",
-                    Foreground = Brushes.IndianRed,
-                    FontWeight = System.Windows.FontWeights.Bold,
-                    FontSize = 10,
-                    VerticalAlignment = System.Windows.VerticalAlignment.Center
-                };
-                
-                var simControlStack = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-                
-                var btnStep = new System.Windows.Controls.Button { Content = "Add Sim Rotation (+5°)", Padding = new System.Windows.Thickness(8, 2, 8, 2), FontSize = 10 };
-                btnStep.Click += (s, e) => {
-                    currentSimulationOffset += 5.0;
-                    Log($"[Simulator Override] Artificial rotation incremented. Total offset: {currentSimulationOffset:F1}°");
-                };
-                
-                var btnReset = new System.Windows.Controls.Button { Content = "Reset", Margin = new System.Windows.Thickness(5, 0, 0, 0), Padding = new System.Windows.Thickness(8, 2, 8, 2), FontSize = 10 };
-                btnReset.Click += (s, e) => { currentSimulationOffset = 0.0; };
-                
-                simControlStack.Children.Add(btnStep);
-                simControlStack.Children.Add(btnReset);
-                
-                System.Windows.Controls.Grid.SetColumn(simLabel, 0);
-                System.Windows.Controls.Grid.SetColumn(simControlStack, 1);
-                simGrid.Children.Add(simLabel);
-                simGrid.Children.Add(simControlStack);
-                simBar.Child = simGrid;
-                
-                System.Windows.Controls.Grid.SetRow(simBar, 2);
-                grid.Children.Add(simBar);
-            }
-
-            mainBorder.Child = grid;
-            dialog.Content = mainBorder;
-
-            // ==================== BACKGROUND TRACKING LOOP ====================
-            var cts = new System.Threading.CancellationTokenSource();
-            dialog.Closed += (s, e) => cts.Cancel();
-
-            Task.Run(async () => {
-                int frameCounter = 0;
-                var solveProgress = new Progress<PlateSolveProgress>(p => {
-                    if (p.Thumbnail != null) {
-                        System.Windows.Application.Current.Dispatcher.Invoke(() => { LastFrame = p.Thumbnail; });
-                    }
-                });
-                var appProgress = new Progress<ApplicationStatus>();
-                
-                // Parse current user binning setting
-                int binVal = 1;
-                if (!string.IsNullOrEmpty(Binning) && Binning.Length >= 1) {
-                    int.TryParse(Binning.Substring(0, 1), out binVal);
-                }
-
-                // Get setup from profile
-                var profile = profileService.ActiveProfile;
-                CaptureSolverParameter solverParam = new CaptureSolverParameter {
-                    Attempts = 1, // Single quick shot per cycle
-                    ReattemptDelay = TimeSpan.FromSeconds(1),
-                    FocalLength = profile.TelescopeSettings.FocalLength,
-                    PixelSize = cameraMediator.GetInfo()?.PixelSize ?? 0,
-                    Binning = binVal, // Adopt user-selected binning!
-                    Coordinates = initialCoords, // Use initial as starting hint for instant solve
-                    BlindFailoverEnabled = true, // Keep enabled per prior agreement
-                    DisableNotifications = true,
-                    SearchRadius = 15.0, // Reverted to standard radius per user instruction
-                    Regions = 5000.0,
-                    MaxObjects = 500
-                };
-                
-                await Task.Delay(1000); // Initial UI settling time
-
-                while (!cts.IsCancellationRequested) {
-                    try {
-                        frameCounter++;
-                        dialog.Dispatcher.BeginInvoke(() => { liveStatusTxt.Text = $"Capturing tracking image #{frameCounter}..."; });
-
-                        PlateSolveResult solveResult = null;
-                        
-                        if (isSimulation) {
-                            await Task.Delay(1500, cts.Token); // simulate camera readout
-                            // Construct simulated dynamic coordinate based on cumulative manual offset
-                            double offHrs = currentSimulationOffset / 15.0;
-                            double currentSimRA = initialCoords.RA + (direction == RotationDirection.East ? offHrs : -offHrs);
-                            if (currentSimRA < 0) currentSimRA += 24.0;
-                            if (currentSimRA >= 24.0) currentSimRA -= 24.0;
-                            
-                            solveResult = new PlateSolveResult {
-                                Success = true,
-                                Coordinates = new Coordinates(currentSimRA, initialCoords.Dec, initialCoords.Epoch, Coordinates.RAType.Hours)
-                            };
-                        } else {
-                            // Real background solve
-                            // Explicitly use CancellationToken.None wrapping inside custom source to avoid killing sequence on dialog close
-                            solveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, cts.Token), cts.Token, "Solve Capture");
-                        }
-
-                        if (solveResult != null && solveResult.Success && !cts.IsCancellationRequested) {
-                            var liveCoords = solveResult.Coordinates;
-                            
-                            // Calculate precise Great Circle distance between M1 and Current
-                            double lat1 = initialCoords.Dec * Math.PI / 180.0;
-                            double lat2 = liveCoords.Dec * Math.PI / 180.0;
-                            double dLon = (liveCoords.RA - initialCoords.RA) * 15.0 * Math.PI / 180.0;
-                            
-                            double cosDistance = Math.Sin(lat1) * Math.Sin(lat2) + Math.Cos(lat1) * Math.Cos(lat2) * Math.Cos(dLon);
-                            cosDistance = Math.Clamp(cosDistance, -1.0, 1.0);
-                            double distRadians = Math.Acos(cosDistance);
-                            
-                            // Convert spherical separation into RA Rotation degrees:
-                            // Sin(Dist/2) = Cos(Dec) * Sin(Rot/2) => Sin(Rot/2) = Sin(Dist/2) / Cos(Dec)
-                            double cosDec = Math.Cos(initialCoords.Dec * Math.PI / 180.0);
-                            double rotDeltaDegrees = 0.0;
-                            
-                            if (Math.Abs(cosDec) > 0.01) { // Safety threshold near pole
-                                double sinRotHalf = Math.Sin(distRadians / 2.0) / cosDec;
-                                sinRotHalf = Math.Clamp(sinRotHalf, -1.0, 1.0);
-                                rotDeltaDegrees = 2.0 * Math.Asin(sinRotHalf) * 180.0 / Math.PI;
-                            } else {
-                                // At the exact pole, the simple RA differential is the rotation
-                                double simpleDiff = Math.Abs(liveCoords.RA - initialCoords.RA) * 15.0;
-                                if (simpleDiff > 180.0) simpleDiff = 360.0 - simpleDiff;
-                                rotDeltaDegrees = simpleDiff;
-                            }
-
-                            // UI dispatch to update progress
-                            dialog.Dispatcher.BeginInvoke(() => {
-                                curAngleTxt.Text = $"{rotDeltaDegrees:F1}°";
-                                progressBar.Value = Math.Min(targetDegrees, rotDeltaDegrees);
-                                liveStatusTxt.Text = "Tracking lock active. Last solve successful.";
-                                
-                                double diffToTarget = Math.Abs(rotDeltaDegrees - targetDegrees);
-                                
-                                // Adaptive coloring based on distance
-                                if (diffToTarget < 1.0) { // Locked in!
-                                    curAngleTxt.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)); // Green
-                                    progressBar.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
-                                    liveStatusTxt.Text = "✨ Target angle reached! Ready to lock.";
-                                } else if (diffToTarget < 10.0) {
-                                    curAngleTxt.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xCE, 0x56)); // Yellow
-                                    progressBar.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xCE, 0x56));
-                                } else {
-                                    curAngleTxt.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x4C, 0x4C)); // Red
-                                    progressBar.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x4C, 0x4C));
-                                }
-                            });
-                        } else {
-                            dialog.Dispatcher.BeginInvoke(() => { liveStatusTxt.Text = "Tracking update skipped: Plate solve failed (stars might be streaked). Contining..."; });
-                        }
-                        
-                        // Pace the loop
-                        await Task.Delay(800, cts.Token);
-
-                    } catch (OperationCanceledException) {
-                        break; // Window closed, exit loop
-                    } catch (Exception ex) {
-                        // Fault tolerant loop - do not terminate on solve runtime error
-                        dialog.Dispatcher.BeginInvoke(() => { liveStatusTxt.Text = $"Loop warning: Attempting reconnect..."; });
-                        await Task.Delay(1500, cts.Token);
-                    }
-                }
-            }, cts.Token);
-
-            dialog.ShowDialog();
-        }
 
         private bool ShowNinaStyledMessageBox(string title, string message, bool isYesNo = false) {
             bool result = false;
@@ -1083,9 +748,40 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 _profileService, cameraMediator, telescopeMediator, plateSolverFactory, imagingMediator, filterWheelMediator, _polarSolver, _settingsManager
             );
             
-            controller.OnManualRotationRequested = async (targetDegrees, direction, initialCoords, sequence, captureSolver, isSimulation) => {
-                System.Windows.Application.Current.Dispatcher.Invoke(() => {
-                    ShowManualRotationDialog(targetDegrees, direction, initialCoords, sequence, captureSolver, isSimulation);
+            controller.OnManualRotationRequested = async (context, targetDegrees, direction, initialCoords, sequence, captureSolver, isSimulation) => {
+                await System.Windows.Application.Current.Dispatcher.Invoke(async () => {
+                    var vm = new NirZonshine.NINA.TwoPointPolarAlignment.ViewModels.ManualRotationVM {
+                        TargetDegrees = targetDegrees,
+                        InstructionText = $"Rotate the mount {direction} to the target angle. Tighten clutches, then click Finish.",
+                        IsSimulation = isSimulation
+                    };
+                    
+                    var dialog = new NirZonshine.NINA.TwoPointPolarAlignment.Views.ManualRotationWindow {
+                        DataContext = vm,
+                        Owner = System.Windows.Application.Current.MainWindow
+                    };
+                    
+                    var dialogCts = new System.Threading.CancellationTokenSource();
+                    vm.FinishRequested += (s, e) => dialog.DialogResult = true;
+                    dialog.Closed += (s, e) => dialogCts.Cancel();
+                    
+                    vm.SimOffsetRequested += (s, offset) => { context.CurrentSimulationOffset = offset; };
+                    vm.SimResetRequested += (s, e) => { context.CurrentSimulationOffset = 0.0; };
+                    
+                    var manualProgress = new Progress<NirZonshine.NINA.TwoPointPolarAlignment.Domain.ManualTrackingProgress>(p => {
+                        if (p.StatusText != null) vm.StatusText = p.StatusText;
+                        if (p.Thumbnail != null) LastFrame = p.Thumbnail;
+                        if (p.TargetDegrees > 0) {
+                            vm.CurrentDegrees = p.CurrentDegrees;
+                            vm.IsLocked = p.IsLocked;
+                        }
+                    });
+
+                    var trackingTask = controller.ExecuteManualTrackingAsync(context, targetDegrees, direction, initialCoords, sequence, captureSolver, manualProgress, dialogCts.Token);
+                    
+                    dialog.ShowDialog();
+                    dialogCts.Cancel();
+                    try { await trackingTask; } catch { }
                 });
             };
             

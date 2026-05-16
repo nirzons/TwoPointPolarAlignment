@@ -1,0 +1,89 @@
+<Window x:Class="NirZonshine.NINA.TwoPointPolarAlignment.Views.ManualRotationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Manual RA Rotation Live Tracking"
+        Width="500" Height="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False">
+    
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Window.Resources>
+
+    <Border Background="#1A1A22" BorderBrush="#3D3D50" BorderThickness="1" CornerRadius="12">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="30" ShadowDepth="0" Opacity="0.6"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="45"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Header -->
+            <Border Background="#22C55E" CornerRadius="12,12,0,0" Padding="20,0,20,0" Grid.Row="0">
+                <TextBlock Text="⟳  Manual RA Rotation — Live Tracking" VerticalAlignment="Center" FontSize="16" FontWeight="Bold" Foreground="White"/>
+            </Border>
+            
+            <!-- Body -->
+            <StackPanel Margin="25,20,25,15" Grid.Row="1">
+                <TextBlock Text="{Binding InstructionText}" FontSize="13" Foreground="#CCCCCC" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,15"/>
+                
+                <Border Background="#121218" CornerRadius="8" Padding="15" BorderThickness="1" BorderBrush="#2A2A36" Margin="0,0,0,20">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding CurrentDegrees, StringFormat=\{0:F1\}°}" FontSize="42" FontWeight="Bold" Foreground="{Binding CurrentAngleForeground}"/>
+                            <TextBlock Text="{Binding TargetDegrees, StringFormat= / \{0:F1\}°}" FontSize="24" FontWeight="SemiBold" Foreground="Gray" VerticalAlignment="Bottom" Margin="5,0,0,8"/>
+                        </StackPanel>
+                        
+                        <TextBlock Text="{Binding StatusText}" FontSize="11" FontStyle="Italic" Foreground="#888899" HorizontalAlignment="Center" Margin="0,5,0,10"/>
+                        
+                        <ProgressBar Height="10" Minimum="0" Maximum="{Binding TargetDegrees}" Value="{Binding CurrentDegrees}" Background="#222228" BorderThickness="0" Foreground="{Binding ProgressBarForeground}"/>
+                    </StackPanel>
+                </Border>
+                
+                <!-- Finish Button -->
+                <Button Command="{Binding FinishCommand}" Content="Finish — Clutches Locked" Height="45" FontSize="16" FontWeight="Bold" Foreground="White" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="pnlBdr" CornerRadius="6" Background="#22C55E">
+                                <Grid>
+                                    <Border x:Name="glow" Background="White" Opacity="0" CornerRadius="6"/>
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="glow" Property="Opacity" Value="0.15"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+            
+            <!-- Sim Bar -->
+            <Border Grid.Row="2" Visibility="{Binding IsSimulation, Converter={StaticResource BooleanToVisibilityConverter}}" Background="#2A1A1A" Padding="10,8,10,8" CornerRadius="0,0,12,12" BorderThickness="0,1,0,0" BorderBrush="#502020">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Text="⚙️ SIMULATION DEBUG PANEL" Foreground="IndianRed" FontWeight="Bold" FontSize="10" VerticalAlignment="Center" Grid.Column="0"/>
+                    
+                    <StackPanel Orientation="Horizontal" Grid.Column="1">
+                        <Button Command="{Binding AddSimRotationCommand}" Content="Add Sim Rotation (+5°)" Padding="8,2,8,2" FontSize="10" Margin="0,0,5,0"/>
+                        <Button Command="{Binding ResetSimRotationCommand}" Content="Reset" Padding="8,2,8,2" FontSize="10"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -27,7 +27,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
         private readonly SettingsManager _settingsManager;
 
         public Func<RescuePromptArgs, Task<bool>> OnInterventionRequested { get; set; }
-        public Func<double, RotationDirection, Coordinates, CaptureSequence, ICaptureSolver, bool, Task> OnManualRotationRequested { get; set; }
+        public Func<AlignmentWorkflowContext, double, RotationDirection, Coordinates, CaptureSequence, ICaptureSolver, bool, Task> OnManualRotationRequested { get; set; }
 
         private readonly System.Threading.SemaphoreSlim _hardwareInterlock = new System.Threading.SemaphoreSlim(1, 1);
 
@@ -256,7 +256,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
                     };
 
-                    await OnManualRotationRequested(_settingsManager.RotationAmount, context.ActiveDirection, context.Coordinates1, seq, capSolver, context.IsSimulation);
+                    await OnManualRotationRequested(context, _settingsManager.RotationAmount, context.ActiveDirection, context.Coordinates1, seq, capSolver, context.IsSimulation);
                     context.CurrentSimulationOffset = _settingsManager.RotationAmount; // Simulate manual move
                 }
             } else {
@@ -348,18 +348,18 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             };
 
             bool isNorthern = latitude >= 0;
-            if (azErr > 0) report.AzimuthInstruction = isNorthern ? "â†  Move Left" : "Move Right â†’";
-            else if (azErr < 0) report.AzimuthInstruction = isNorthern ? "Move Right â†’" : "â†  Move Left";
+            if (azErr > 0) report.AzimuthInstruction = isNorthern ? "← Move Left" : "Move Right →";
+            else if (azErr < 0) report.AzimuthInstruction = isNorthern ? "Move Right →" : "← Move Left";
             else report.AzimuthInstruction = "Aligned";
 
-            if (altErr > 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Down â†“" : "Move Down â†º";
-            else if (altErr < 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Up â†‘" : "Move Up â†»";
+            if (altErr > 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Down ↓" : "Move Down ↺";
+            else if (altErr < 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Up ↑" : "Move Up ↻";
             else report.AltitudeInstruction = "Aligned";
 
-            if (total <= 1.0) { report.TotalErrorRating = "âœ¨ Excellent Alignment"; report.TotalErrorRatingColorHex = "#00FF7F"; }
-            else if (total <= 3.0) { report.TotalErrorRating = "ðŸŸ¢ Good Alignment"; report.TotalErrorRatingColorHex = "#98FB98"; }
-            else if (total <= 10.0) { report.TotalErrorRating = "ðŸŸ¡ Fair Alignment"; report.TotalErrorRatingColorHex = "#FFD700"; }
-            else { report.TotalErrorRating = "ðŸ”´ Poor Alignment"; report.TotalErrorRatingColorHex = "#FF4D4D"; }
+            if (total <= 1.0) { report.TotalErrorRating = "✨ Excellent Alignment"; report.TotalErrorRatingColorHex = "#00FF7F"; }
+            else if (total <= 3.0) { report.TotalErrorRating = "🟢 Good Alignment"; report.TotalErrorRatingColorHex = "#98FB98"; }
+            else if (total <= 10.0) { report.TotalErrorRating = "🟡 Fair Alignment"; report.TotalErrorRatingColorHex = "#FFD700"; }
+            else { report.TotalErrorRating = "🔴 Poor Alignment"; report.TotalErrorRatingColorHex = "#FF4D4D"; }
 
             progress.Report(report);
         }
@@ -382,7 +382,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             if (seconds >= 60) { totalMinutes += 1; seconds -= 60; }
             int degrees = totalMinutes / 60;
             int minutes = totalMinutes % 60;
-            return degrees > 0 ? $"{degrees:D2}Â° {minutes:D2}' {seconds:D2}\"" : $"{minutes:D2}' {seconds:D2}\"";
+            return degrees > 0 ? $"{degrees:D2}° {minutes:D2}' {seconds:D2}\"" : $"{minutes:D2}' {seconds:D2}\"";
         }
 
         private string FormatError(double errorArcmin) {
@@ -393,7 +393,100 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             int degrees = totalMinutes / 60;
             int minutes = totalMinutes % 60;
             string sign = errorArcmin < 0 ? "-" : "+";
-            return degrees > 0 ? $"{sign}{degrees:D2}Â° {minutes:D2}' {seconds:D2}\"" : $"{sign}{minutes:D2}' {seconds:D2}\"";
+            return degrees > 0 ? $"{sign}{degrees:D2}° {minutes:D2}' {seconds:D2}\"" : $"{sign}{minutes:D2}' {seconds:D2}\"";
+        }
+
+        public async Task ExecuteManualTrackingAsync(AlignmentWorkflowContext context, double targetDegrees, RotationDirection direction, Coordinates initialCoords, CaptureSequence sequence, ICaptureSolver captureSolver, IProgress<ManualTrackingProgress> progress, CancellationToken trackingToken) {
+            int frameCounter = 0;
+            var solveProgress = new Progress<PlateSolveProgress>(p => {
+                if (p.Thumbnail != null) {
+                    progress.Report(new ManualTrackingProgress { Thumbnail = p.Thumbnail });
+                }
+            });
+            var appProgress = new Progress<ApplicationStatus>();
+
+            int binVal = 1;
+            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) {
+                int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            }
+
+            var profile = _profileService.ActiveProfile;
+            CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(1),
+                FocalLength = profile.TelescopeSettings.FocalLength,
+                PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
+                Binning = binVal, Coordinates = initialCoords, BlindFailoverEnabled = true,
+                DisableNotifications = true, SearchRadius = 15.0, Regions = 5000.0, MaxObjects = 500
+            };
+
+            await Task.Delay(1000, trackingToken);
+
+            while (!trackingToken.IsCancellationRequested) {
+                try {
+                    frameCounter++;
+                    progress.Report(new ManualTrackingProgress { StatusText = $"Capturing tracking image #{frameCounter}..." });
+
+                    PlateSolveResult solveResult = null;
+
+                    if (context.IsSimulation) {
+                        await Task.Delay(1500, trackingToken);
+                        double offHrs = context.CurrentSimulationOffset / 15.0;
+                        double currentSimRA = initialCoords.RA + (direction == RotationDirection.East ? offHrs : -offHrs);
+                        if (currentSimRA < 0) currentSimRA += 24.0;
+                        if (currentSimRA >= 24.0) currentSimRA -= 24.0;
+
+                        solveResult = new PlateSolveResult {
+                            Success = true,
+                            Coordinates = new Coordinates(currentSimRA, initialCoords.Dec, initialCoords.Epoch, Coordinates.RAType.Hours)
+                        };
+                    } else {
+                        solveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appProgress, trackingToken), trackingToken, "Solve Capture");
+                    }
+
+                    if (solveResult != null && solveResult.Success && !trackingToken.IsCancellationRequested) {
+                        var liveCoords = solveResult.Coordinates;
+                        double lat1 = initialCoords.Dec * Math.PI / 180.0;
+                        double lat2 = liveCoords.Dec * Math.PI / 180.0;
+                        double dLon = (liveCoords.RA - initialCoords.RA) * 15.0 * Math.PI / 180.0;
+
+                        double cosDistance = Math.Sin(lat1) * Math.Sin(lat2) + Math.Cos(lat1) * Math.Cos(lat2) * Math.Cos(dLon);
+                        cosDistance = Math.Clamp(cosDistance, -1.0, 1.0);
+                        double distRadians = Math.Acos(cosDistance);
+
+                        double cosDec = Math.Cos(initialCoords.Dec * Math.PI / 180.0);
+                        double rotDeltaDegrees = 0.0;
+
+                        if (Math.Abs(cosDec) > 0.01) {
+                            double sinRotHalf = Math.Sin(distRadians / 2.0) / cosDec;
+                            sinRotHalf = Math.Clamp(sinRotHalf, -1.0, 1.0);
+                            rotDeltaDegrees = 2.0 * Math.Asin(sinRotHalf) * 180.0 / Math.PI;
+                        } else {
+                            double simpleDiff = Math.Abs(liveCoords.RA - initialCoords.RA) * 15.0;
+                            if (simpleDiff > 180.0) simpleDiff = 360.0 - simpleDiff;
+                            rotDeltaDegrees = simpleDiff;
+                        }
+
+                        double diffToTarget = Math.Abs(rotDeltaDegrees - targetDegrees);
+                        bool isLocked = diffToTarget < 1.0;
+
+                        progress.Report(new ManualTrackingProgress {
+                            CurrentDegrees = rotDeltaDegrees,
+                            TargetDegrees = targetDegrees,
+                            StatusText = isLocked ? "✨ Target angle reached! Ready to lock." : "Tracking lock active. Last solve successful.",
+                            IsLocked = isLocked
+                        });
+                    } else {
+                        progress.Report(new ManualTrackingProgress { StatusText = "Tracking update skipped: Plate solve failed. Continuing..." });
+                    }
+
+                    await Task.Delay(800, trackingToken);
+                } catch (OperationCanceledException) {
+                    break;
+                } catch (Exception) {
+                    progress.Report(new ManualTrackingProgress { StatusText = "Loop warning: Attempting reconnect..." });
+                    await Task.Delay(1500, trackingToken);
+                }
+            }
         }
     }
 }
