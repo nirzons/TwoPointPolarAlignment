@@ -1,4 +1,5 @@
 using System;
+using Math = System.Math;
 using NINA.WPF.Base.ViewModel;
 using NINA.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
@@ -132,6 +133,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private Coordinates coordinates2;
         private double angle2;
         private double lstMeasurement2;
+        private readonly NirZonshine.NINA.TwoPointPolarAlignment.Solvers.IPolarSolver _polarSolver = new NirZonshine.NINA.TwoPointPolarAlignment.Solvers.TwoPointPolarSolver();
+        private AlignmentCalibrationState _activeCalibration;
 
         private static Brush CreateFrozenBrush(string hex) {
             try {
@@ -2099,71 +2102,20 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private void CalculateErrors(Coordinates c1, double a1, Coordinates c2, double a2, bool isInitial = true) {
-            Vector3D v1 = Vector3D.FromEquatorial(c1);
-            Vector3D v2;
+            double siteLatitude = GetLatitude();
 
             if (isInitial) {
-                v2 = Vector3D.FromEquatorial(c2);
-                measurement2Vector = v2;
-
-                // Robust 3D Rotation Matrix approach to find exact center of rotation (Mount's Polar Axis)
-                // Frame 1
-                Vector3D N1 = (new Vector3D(0, 0, 1) - v1.Z * v1).Normalize();
-                Vector3D E1 = Vector3D.Cross(new Vector3D(0, 0, 1), v1).Normalize();
-                double a1Rad = a1 * Math.PI / 180.0;
-                Vector3D Y1 = (Math.Cos(a1Rad) * N1 + Math.Sin(a1Rad) * E1).Normalize();
-                Vector3D X1 = Vector3D.Cross(Y1, v1).Normalize();
-
-                // Frame 2
-                Vector3D N2 = (new Vector3D(0, 0, 1) - v2.Z * v2).Normalize();
-                Vector3D E2 = Vector3D.Cross(new Vector3D(0, 0, 1), v2).Normalize();
-                double a2Rad = a2 * Math.PI / 180.0;
-                Vector3D Y2 = (Math.Cos(a2Rad) * N2 + Math.Sin(a2Rad) * E2).Normalize();
-                Vector3D X2 = Vector3D.Cross(Y2, v2).Normalize();
-
-                // Rotation Matrix R = Frame2 * Frame1^T
-                double r32 = X2.Z * X1.Y + Y2.Z * Y1.Y + v2.Z * v1.Y;
-                double r23 = X2.Y * X1.Z + Y2.Y * Y1.Z + v2.Y * v1.Z;
-                
-                double r13 = X2.X * X1.Z + Y2.X * Y1.Z + v2.X * v1.Z;
-                double r31 = X2.Z * X1.X + Y2.Z * Y1.X + v2.Z * v1.X;
-                
-                double r21 = X2.Y * X1.X + Y2.Y * Y1.X + v2.Y * v1.X;
-                double r12 = X2.X * X1.Y + Y2.X * Y1.Y + v2.X * v1.Y;
-
-                // The rotation axis is the eigenvector associated with eigenvalue 1, proportional to the skew-symmetric part
-                Vector3D P = new Vector3D(r32 - r23, r13 - r31, r21 - r12).Normalize();
-
-                // Ensure it points to the correct hemisphere (same as celestial pole we are aligning to)
-                double siteLatitude = GetLatitude();
-                if (siteLatitude >= 0 && P.Z < 0) {
-                    P = new Vector3D(-P.X, -P.Y, -P.Z);
-                } else if (siteLatitude < 0 && P.Z > 0) {
-                    P = new Vector3D(-P.X, -P.Y, -P.Z);
-                }
-
-                calculatedPolarAxis = P;
+                _activeCalibration = _polarSolver.Calibrate(c1, a1, c2, a2, lstMeasurement2, siteLatitude);
+                calculatedPolarAxis = _activeCalibration.InitialPolarAxis;
                 initialPolarAxis = calculatedPolarAxis;
+                measurement2Vector = _activeCalibration.Measurement2Vector;
             } else {
-                // Correct live RA for earth's rotation since measurement 2
                 double lstLive = 0.0;
                 try { lstLive = telescopeMediator?.GetInfo()?.SiderealTime ?? 0.0; } catch { }
                 if (lstLive == 0.0) lstLive = c2.RA; // Fallback
 
-                double deltaLst = lstLive - lstMeasurement2;
-                // Handle wrap-around
-                if (deltaLst > 12.0) deltaLst -= 24.0;
-                if (deltaLst < -12.0) deltaLst += 24.0;
-
-                double correctedRa = c2.RA - deltaLst;
-                if (correctedRa < 0) correctedRa += 24.0;
-                if (correctedRa >= 24.0) correctedRa -= 24.0;
-
-                Coordinates correctedC2 = new Coordinates(correctedRa, c2.Dec, c2.Epoch, Coordinates.RAType.Hours);
-                v2 = Vector3D.FromEquatorial(correctedC2);
-
-                // Live adjustment update (non-accumulative relative to initial polar axis)
-                calculatedPolarAxis = (v2 - measurement2Vector + initialPolarAxis).Normalize();
+                AlignmentError err = _polarSolver.EvaluateLiveError(c2, lstLive, _activeCalibration, siteLatitude);
+                calculatedPolarAxis = err.CalculatedPolarAxis;
             }
 
             UpdateErrorViewFromPolarAxis(calculatedPolarAxis, c2.RA);
@@ -2171,14 +2123,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         private void UpdateErrorViewFromPolarAxis(Vector3D axis, double referenceRA) {
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => {
-                // Convert axis to Dec and RA
-                double decP = Math.Asin(Math.Clamp(axis.Z, -1.0, 1.0)) * 180.0 / Math.PI;
-                double raP = Math.Atan2(axis.Y, axis.X) * 12.0 / Math.PI;
-                if (raP < 0) raP += 24.0;
-
                 // Get observer's Latitude
                 double latitude = GetLatitude();
-                double latRad = latitude * Math.PI / 180.0;
 
                 // Get Local Sidereal Time (LST)
                 double lst = 0.0;
@@ -2186,47 +2132,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     lst = telescopeMediator?.GetInfo()?.SiderealTime ?? 0.0;
                 } catch { }
 
-                if (lst == 0.0) {
-                    lst = referenceRA;
-                }
+                AlignmentError error = _polarSolver.CalculateErrorFromAxis(axis, referenceRA, lst, latitude);
 
-                // Hour Angle of polar axis
-                double haP = lst - raP;
-                if (haP < 0) haP += 24.0;
-                if (haP >= 24.0) haP -= 24.0;
-
-                double decRad = decP * Math.PI / 180.0;
-                double haRad = haP * 15.0 * Math.PI / 180.0;
-
-                // Rigorous equatorial to horizontal conversion
-                double sinAlt = Math.Sin(decRad) * Math.Sin(latRad) + Math.Cos(decRad) * Math.Cos(latRad) * Math.Cos(haRad);
-                sinAlt = Math.Clamp(sinAlt, -1.0, 1.0);
-                double altP = Math.Asin(sinAlt) * 180.0 / Math.PI;
-
-                double cosAlt = Math.Cos(altP * Math.PI / 180.0);
-                double azP = 0.0;
-                if (Math.Abs(cosAlt) > 1e-6) {
-                    double cosAz = (Math.Sin(decRad) * Math.Cos(latRad) - Math.Cos(decRad) * Math.Sin(latRad) * Math.Cos(haRad)) / cosAlt;
-                    double sinAz = (-Math.Cos(decRad) * Math.Sin(haRad)) / cosAlt;
-                    cosAz = Math.Clamp(cosAz, -1.0, 1.0);
-                    azP = Math.Atan2(sinAz, cosAz) * 180.0 / Math.PI;
-                    if (azP < 0) azP += 360.0;
-                }
-
-                // True Pole coordinates
-                double trueAlt = Math.Abs(latitude);
-                double trueAz = (latitude >= 0) ? 0.0 : 180.0;
-
-                // Compute differences
-                double altErrorDeg = altP - trueAlt;
-                double azDiff = azP - trueAz;
-                while (azDiff > 180.0) azDiff -= 360.0;
-                while (azDiff < -180.0) azDiff += 360.0;
-                double azErrorDeg = azDiff * Math.Cos(latRad);
-
-                // Convert to arcminutes
-                double altErrorArcmin = altErrorDeg * 60.0;
-                double azErrorArcmin = azErrorDeg * 60.0;
+                double altErrorArcmin = error.AltitudeErrorArcmin;
+                double azErrorArcmin = error.AzimuthErrorArcmin;
 
                 if (simTimeFactor > 0) {
                     double jitter = (new Random().NextDouble() - 0.5) * 0.5; // Visual jitter multiplier
