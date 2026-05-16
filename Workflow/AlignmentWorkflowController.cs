@@ -1,0 +1,399 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Media;
+using NINA.Core.Model;
+using NINA.Core.Model.Equipment;
+using NINA.Core.Utility.Notification;
+using NINA.Equipment.Interfaces.Mediator;
+using NINA.Equipment.Model;
+using NINA.PlateSolving;
+using NINA.PlateSolving.Interfaces;
+using NINA.Profile.Interfaces;
+using NirZonshine.NINA.TwoPointPolarAlignment.Domain;
+using NirZonshine.NINA.TwoPointPolarAlignment.Solvers;
+using NirZonshine.NINA.TwoPointPolarAlignment.Services;
+using NINA.Astrometry;
+
+namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
+    public class AlignmentWorkflowController {
+        private readonly IProfileService _profileService;
+        private readonly ICameraMediator _cameraMediator;
+        private readonly ITelescopeMediator _telescopeMediator;
+        private readonly IPlateSolverFactory _plateSolverFactory;
+        private readonly IImagingMediator _imagingMediator;
+        private readonly IFilterWheelMediator _filterWheelMediator;
+        private readonly IPolarSolver _polarSolver;
+        private readonly SettingsManager _settingsManager;
+
+        public Func<RescuePromptArgs, Task<bool>> OnInterventionRequested { get; set; }
+        public Func<double, RotationDirection, Coordinates, CaptureSequence, ICaptureSolver, bool, Task> OnManualRotationRequested { get; set; }
+
+        private readonly System.Threading.SemaphoreSlim _hardwareInterlock = new System.Threading.SemaphoreSlim(1, 1);
+
+        public AlignmentWorkflowController(
+            IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator,
+            IPlateSolverFactory plateSolverFactory, IImagingMediator imagingMediator, IFilterWheelMediator filterWheelMediator,
+            IPolarSolver polarSolver, SettingsManager settingsManager) {
+            _profileService = profileService;
+            _cameraMediator = cameraMediator;
+            _telescopeMediator = telescopeMediator;
+            _plateSolverFactory = plateSolverFactory;
+            _imagingMediator = imagingMediator;
+            _filterWheelMediator = filterWheelMediator;
+            _polarSolver = polarSolver;
+            _settingsManager = settingsManager;
+        }
+
+        private async Task<T> ExecuteHardwareOperationAsync<T>(Func<Task<T>> operation, CancellationToken token, string operationName = "Hardware Operation") {
+            bool acquired = false;
+            try { acquired = await _hardwareInterlock.WaitAsync(TimeSpan.FromSeconds(30), token); } catch (OperationCanceledException) { throw; }
+            if (!acquired) throw new HardwareTeardownTimeoutException($"Hardware driver hung for more than 30 seconds during {operationName}. Safety abort triggered.");
+            try { return await operation(); } finally { _hardwareInterlock.Release(); }
+        }
+
+        private async Task ExecuteHardwareOperationAsync(Func<Task> operation, CancellationToken token, string operationName = "Hardware Operation") {
+            bool acquired = false;
+            try { acquired = await _hardwareInterlock.WaitAsync(TimeSpan.FromSeconds(30), token); } catch (OperationCanceledException) { throw; }
+            if (!acquired) throw new HardwareTeardownTimeoutException($"Hardware driver hung for more than 30 seconds during {operationName}. Safety abort triggered.");
+            try { await operation(); } finally { _hardwareInterlock.Release(); }
+        }
+
+        public async Task ExecuteWorkflowAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail) {
+            ReportLog(progress, "Starting alignment sequence...");
+            
+            var rand = new Random();
+            context.ManualSimBiasRA = (rand.NextDouble() > 0.5 ? 1.0 : -1.0) * (0.25 + rand.NextDouble() * 0.25) / 2.0 / 15.0;
+            context.ManualSimBiasDec = (rand.NextDouble() > 0.5 ? 1.0 : -1.0) * (0.25 + rand.NextDouble() * 0.25) * 3.0;
+            
+            await ExecutePreFlightAsync(context, token, progress);
+            await ExecuteInitialPositioningAsync(context, token, progress);
+
+            var result1 = await ExecuteMeasurementLoopAsync(context, token, progress, updateThumbnail, 1);
+            context.Coordinates1 = result1.Coordinates;
+            context.Angle1 = result1.PositionAngle;
+
+            await ExecuteRotationAsync(context, token, progress, updateThumbnail);
+
+            var result2 = await ExecuteMeasurementLoopAsync(context, token, progress, updateThumbnail, 2);
+            context.Coordinates2 = result2.Coordinates;
+            context.Angle2 = result2.PositionAngle;
+            context.LstMeasurement2 = _telescopeMediator.GetInfo()?.SiderealTime ?? context.Coordinates2.RA;
+
+            await ExecuteCalculationAndLiveAdjustmentAsync(context, token, progress, updateThumbnail);
+        }
+        
+        private void ReportLog(IProgress<AlignmentProgressReport> progress, string log) {
+            progress.Report(new AlignmentProgressReport { LogMessage = log });
+        }
+        
+        private void ReportStatus(IProgress<AlignmentProgressReport> progress, string status, string colorHex) {
+            progress.Report(new AlignmentProgressReport { StatusText = status, StatusColorHex = colorHex });
+        }
+
+        private async Task ExecutePreFlightAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress) {
+            ReportLog(progress, "Initiating Phase A (Pre-flight Checks)...");
+
+            if (!(_cameraMediator.GetInfo()?.Connected ?? false)) {
+                string err = "Error: Camera is not connected!";
+                ReportLog(progress, err);
+                throw new InvalidOperationException(err);
+            }
+
+            bool isMountConnected = _telescopeMediator.GetInfo()?.Connected ?? false;
+            if (!isMountConnected && _settingsManager.Method != RotationMethod.Manual) {
+                string err = "Error: Telescope Mount is not connected!";
+                ReportLog(progress, err);
+                throw new InvalidOperationException(err);
+            }
+
+            if (!string.IsNullOrEmpty(_settingsManager.Filter) && _settingsManager.Filter != "(Current)") {
+                if (!(_filterWheelMediator?.GetInfo()?.Connected ?? false)) {
+                    string err = $"Error: Specific filter '{_settingsManager.Filter}' is selected, but the Filter Wheel is not connected!";
+                    ReportLog(progress, err);
+                    throw new InvalidOperationException(err);
+                }
+            }
+            
+            ReportLog(progress, "Phase A (Pre-flight Checks) completed successfully!");
+            await Task.Delay(1000, token);
+            
+            if (isMountConnected && (_telescopeMediator.GetInfo()?.TrackingEnabled ?? false)) {
+                try { _telescopeMediator.SetTrackingEnabled(false); ReportLog(progress, "Disabling telescope tracking."); } catch { }
+            }
+        }
+
+        private async Task ExecuteInitialPositioningAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress) {
+            ReportLog(progress, "Initiating Phase B (Initial Positioning)...");
+            
+            context.IsSimulation = (_cameraMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                                   (_telescopeMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false);
+            context.CurrentSimulationOffset = 0.0;
+            
+            var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
+            
+            if (!string.IsNullOrEmpty(_settingsManager.Filter) && _settingsManager.Filter != "(Current)") {
+                FilterInfo targetFilterInfo = new FilterInfo { Name = _settingsManager.Filter, Position = 0 };
+                ReportLog(progress, $"Changing filter to {_settingsManager.Filter}...");
+                await _filterWheelMediator.ChangeFilter(targetFilterInfo, token, new Progress<ApplicationStatus>());
+            }
+
+            if (context.ActivePreRotate) {
+                double offsetDegrees = _settingsManager.RotationAmount / 2.0;
+                double offsetHours = offsetDegrees / 15.0;
+                ReportStatus(progress, "Slewing (Pre-rotate)", "#FBBF24");
+                ReportLog(progress, $"Pre-rotating RA by {offsetDegrees:F1}Â°...");
+
+                if (currentPosition != null) {
+                    double targetRA = currentPosition.RA + (context.ActiveDirection == RotationDirection.East ? -offsetHours : offsetHours);
+                    if (targetRA < 0) targetRA += 24.0;
+                    if (targetRA >= 24.0) targetRA -= 24.0;
+
+                    Coordinates targetCoords = new Coordinates(targetRA, currentPosition.Dec, currentPosition.Epoch, Coordinates.RAType.Hours);
+                    await ExecuteHardwareOperationAsync(() => _telescopeMediator.SlewToCoordinatesAsync(targetCoords, token), token, "Slew to Target");
+                    try { _telescopeMediator.SetTrackingEnabled(false); } catch { }
+                }
+            }
+        }
+
+        private async Task<PlateSolveResult> ExecuteMeasurementLoopAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail, int measurementIndex) {
+            ReportLog(progress, $"Initiating Phase {(measurementIndex == 1 ? "C" : "E")} (Measurement {measurementIndex})...");
+            ReportStatus(progress, $"Solving Point {measurementIndex}...", "#6366F1");
+
+            int binVal = 1;
+            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) {
+                int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            }
+
+            CaptureSequence sequence = new CaptureSequence {
+                ExposureTime = _settingsManager.ExposureTime,
+                ImageType = "LIGHT",
+                Gain = _settingsManager.Gain,
+                Binning = new BinningMode((short)binVal, (short)binVal),
+                FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                Offset = _settingsManager.Offset,
+                Enabled = true,
+                TotalExposureCount = 1
+            };
+
+            var profile = _profileService.ActiveProfile;
+            var plateSolveSettings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+            if (plateSolveSettings == null && !context.IsSimulation) throw new InvalidOperationException("Could not retrieve active plate solve settings.");
+
+            IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
+            ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
+
+            for (int attempt = 1; attempt <= _settingsManager.PlateSolveRetries; attempt++) {
+                token.ThrowIfCancellationRequested();
+                if (context.IsSimulation) {
+                    await Task.Delay(3000, token);
+                    var simPos = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
+                    
+                    double injectedRA = simPos.RA + context.ManualSimBiasRA;
+                    if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
+                    double injectedDec = simPos.Dec + context.ManualSimBiasDec;
+                    
+                    if (measurementIndex == 2 && _settingsManager.Method == RotationMethod.Manual) {
+                        double baseRA = context.Coordinates1?.RA ?? simPos.RA;
+                        double baseDec = context.Coordinates1?.Dec ?? simPos.Dec;
+                        double offHrs = context.CurrentSimulationOffset / 15.0;
+                        injectedRA = baseRA + (context.ActiveDirection == RotationDirection.East ? offHrs : -offHrs);
+                        if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
+                        injectedDec = baseDec;
+                    }
+
+                    return new PlateSolveResult {
+                        Success = true,
+                        Coordinates = new Coordinates(injectedRA, injectedDec, simPos.Epoch, Coordinates.RAType.Hours),
+                        PositionAngle = measurementIndex == 1 ? 45.0 : context.Angle1
+                    };
+                } else {
+                    var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
+                    CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                        Attempts = 1,
+                        ReattemptDelay = TimeSpan.FromSeconds(2),
+                        FocalLength = profile.TelescopeSettings.FocalLength,
+                        PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
+                        Binning = binVal,
+                        SearchRadius = 15.0,
+                        Regions = 5000.0,
+                        MaxObjects = 500,
+                        Coordinates = measurementIndex == 1 ? currentPosition : context.Coordinates1, // use 1 as hint for 2
+                        BlindFailoverEnabled = true,
+                        DisableNotifications = true
+                    };
+
+                    var solveProgress = new Progress<PlateSolveProgress>(p => { if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail); });
+                    try {
+                        var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, new Progress<ApplicationStatus>(), token), token, "Solve Capture");
+                        if (res != null && res.Success) return res;
+                    } catch (Exception ex) {
+                        ReportLog(progress, $"Internal solve error: {ex.Message}");
+                    }
+                }
+                ReportLog(progress, $"Attempt {attempt} failed.");
+                await Task.Delay(1000, token);
+            }
+
+            throw new InvalidOperationException($"Plate solve failed after {_settingsManager.PlateSolveRetries} attempts.");
+        }
+
+        private async Task ExecuteRotationAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail) {
+            ReportLog(progress, "Initiating Phase D (Rotation)...");
+            if (_settingsManager.Method == RotationMethod.Manual) {
+                if (OnManualRotationRequested != null) {
+                    var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
+                    var profile = _profileService.ActiveProfile;
+                    var ps = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+                    IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(ps);
+                    ICaptureSolver capSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
+                    
+                    int binVal = 1;
+                    if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+                    CaptureSequence seq = new CaptureSequence {
+                        ExposureTime = _settingsManager.ExposureTime, ImageType = "LIGHT", Gain = _settingsManager.Gain,
+                        Binning = new BinningMode((short)binVal, (short)binVal), FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                        Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
+                    };
+
+                    await OnManualRotationRequested(_settingsManager.RotationAmount, context.ActiveDirection, context.Coordinates1, seq, capSolver, context.IsSimulation);
+                    context.CurrentSimulationOffset = _settingsManager.RotationAmount; // Simulate manual move
+                }
+            } else {
+                ReportStatus(progress, "Slewing", "#FBBF24");
+                var basePos = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates1;
+                double rotOffsetHours = _settingsManager.RotationAmount / 15.0;
+                double targetRA = basePos.RA + (context.ActiveDirection == RotationDirection.East ? rotOffsetHours : -rotOffsetHours);
+                if (targetRA < 0) targetRA += 24.0; if (targetRA >= 24.0) targetRA -= 24.0;
+                Coordinates targetCoords = new Coordinates(targetRA, basePos.Dec, basePos.Epoch, Coordinates.RAType.Hours);
+                
+                await ExecuteHardwareOperationAsync(() => _telescopeMediator.SlewToCoordinatesAsync(targetCoords, token), token, "Slew to Rotated Target");
+                try { _telescopeMediator.SetTrackingEnabled(false); } catch { }
+            }
+            await Task.Delay(1000, token);
+        }
+
+        private async Task ExecuteCalculationAndLiveAdjustmentAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail) {
+            ReportLog(progress, "Initiating Phase F (Calculation & Live Adjustment)...");
+            ReportStatus(progress, "Calculating...", "#6366F1");
+
+            double latitude = GetLatitude();
+            var calibration = _polarSolver.Calibrate(context.Coordinates1, context.Angle1, context.Coordinates2, context.Angle2, context.LstMeasurement2, latitude);
+            
+            ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2);
+            progress.Report(new AlignmentProgressReport { HasSuccessfulAlignmentReached = true });
+
+            int binVal = 1;
+            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            CaptureSequence seq = new CaptureSequence {
+                ExposureTime = _settingsManager.ExposureTime, ImageType = "LIGHT", Gain = _settingsManager.Gain,
+                Binning = new BinningMode((short)binVal, (short)binVal), FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
+            };
+            
+            var profile = _profileService.ActiveProfile;
+            var plateSolveSettings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+            IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
+            ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
+
+            while (!token.IsCancellationRequested) {
+                if (context.IsSimulation) {
+                    await Task.Delay(2000, token);
+                    var simPos = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
+                    double baseRA = context.Coordinates2?.RA ?? simPos.RA;
+                    double baseDec = context.Coordinates2?.Dec ?? simPos.Dec;
+                    var c2 = new Coordinates(baseRA + (new Random().NextDouble() - 0.5) * 0.015, baseDec + (new Random().NextDouble() - 0.5) * 0.015, Epoch.JNOW, Coordinates.RAType.Hours);
+                    
+                    var err = _polarSolver.EvaluateLiveError(c2, context.LstMeasurement2, calibration, latitude);
+                    ReportAlignmentProgress(progress, err.CalculatedPolarAxis, c2.RA, latitude, context.LstMeasurement2);
+                } else {
+                    var liveHintCoords = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2;
+                    CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                        Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(2), FocalLength = profile.TelescopeSettings.FocalLength,
+                        PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0, Binning = binVal, SearchRadius = 15.0, Regions = 5000.0,
+                        MaxObjects = 500, Coordinates = liveHintCoords, BlindFailoverEnabled = (_settingsManager.Method == RotationMethod.Manual),
+                        DisableNotifications = true
+                    };
+
+                    var solveProgress = new Progress<PlateSolveProgress>(p => { if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail); });
+                    try {
+                        var liveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, solveProgress, new Progress<ApplicationStatus>(), token), token, "Live Solve Capture");
+                        if (liveResult != null && liveResult.Success) {
+                            ReportStatus(progress, "Solved", "#22C55E");
+                            double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
+                            var err = _polarSolver.EvaluateLiveError(liveResult.Coordinates, lstLive, calibration, latitude);
+                            ReportAlignmentProgress(progress, err.CalculatedPolarAxis, liveResult.Coordinates.RA, latitude, lstLive);
+                        } else {
+                            ReportStatus(progress, "Could not solve", "#EF4444");
+                        }
+                    } catch { }
+                }
+                await Task.Delay(100, token);
+            }
+        }
+
+        private void ReportAlignmentProgress(IProgress<AlignmentProgressReport> progress, Vector3D calculatedPolarAxis, double referenceRA, double latitude, double lst) {
+            var error = _polarSolver.CalculateErrorFromAxis(calculatedPolarAxis, referenceRA, lst, latitude);
+            double altErr = error.AltitudeErrorArcmin;
+            double azErr = error.AzimuthErrorArcmin;
+            double total = Math.Sqrt(altErr * altErr + azErr * azErr);
+
+            var report = new AlignmentProgressReport {
+                AltitudeError = FormatError(altErr),
+                AzimuthError = FormatError(azErr),
+                TotalErrorValue = total,
+                TotalError = FormatTotalError(total),
+                IsAltitudePriority = total >= 0.5 && Math.Abs(altErr) > Math.Abs(azErr) + 0.1,
+                IsAzimuthPriority = total >= 0.5 && Math.Abs(azErr) > Math.Abs(altErr) + 0.1
+            };
+
+            bool isNorthern = latitude >= 0;
+            if (azErr > 0) report.AzimuthInstruction = isNorthern ? "â†  Move Left" : "Move Right â†’";
+            else if (azErr < 0) report.AzimuthInstruction = isNorthern ? "Move Right â†’" : "â†  Move Left";
+            else report.AzimuthInstruction = "Aligned";
+
+            if (altErr > 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Down â†“" : "Move Down â†º";
+            else if (altErr < 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Up â†‘" : "Move Up â†»";
+            else report.AltitudeInstruction = "Aligned";
+
+            if (total <= 1.0) { report.TotalErrorRating = "âœ¨ Excellent Alignment"; report.TotalErrorRatingColorHex = "#00FF7F"; }
+            else if (total <= 3.0) { report.TotalErrorRating = "ðŸŸ¢ Good Alignment"; report.TotalErrorRatingColorHex = "#98FB98"; }
+            else if (total <= 10.0) { report.TotalErrorRating = "ðŸŸ¡ Fair Alignment"; report.TotalErrorRatingColorHex = "#FFD700"; }
+            else { report.TotalErrorRating = "ðŸ”´ Poor Alignment"; report.TotalErrorRatingColorHex = "#FF4D4D"; }
+
+            progress.Report(report);
+        }
+
+        private double GetLatitude() {
+            try {
+                var info = _telescopeMediator?.GetInfo();
+                if (info != null) {
+                    var latProp = info.GetType().GetProperty("Latitude") ?? info.GetType().GetProperty("SiteLatitude");
+                    if (latProp != null) return Convert.ToDouble(latProp.GetValue(info));
+                }
+            } catch { }
+            return 45.0; // Fallback
+        }
+
+        private string FormatTotalError(double errorArcmin) {
+            double absMin = Math.Abs(errorArcmin);
+            int totalMinutes = (int)Math.Truncate(absMin);
+            int seconds = (int)Math.Round((absMin - totalMinutes) * 60.0);
+            if (seconds >= 60) { totalMinutes += 1; seconds -= 60; }
+            int degrees = totalMinutes / 60;
+            int minutes = totalMinutes % 60;
+            return degrees > 0 ? $"{degrees:D2}Â° {minutes:D2}' {seconds:D2}\"" : $"{minutes:D2}' {seconds:D2}\"";
+        }
+
+        private string FormatError(double errorArcmin) {
+            double absMin = Math.Abs(errorArcmin);
+            int totalMinutes = (int)Math.Truncate(absMin);
+            int seconds = (int)Math.Round((absMin - totalMinutes) * 60.0);
+            if (seconds >= 60) { totalMinutes += 1; seconds -= 60; }
+            int degrees = totalMinutes / 60;
+            int minutes = totalMinutes % 60;
+            string sign = errorArcmin < 0 ? "-" : "+";
+            return degrees > 0 ? $"{sign}{degrees:D2}Â° {minutes:D2}' {seconds:D2}\"" : $"{sign}{minutes:D2}' {seconds:D2}\"";
+        }
+    }
+}
