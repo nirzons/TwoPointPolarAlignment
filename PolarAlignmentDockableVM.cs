@@ -21,6 +21,7 @@ using System.ComponentModel.Composition;
 using System.Windows.Media;
 using System.Windows.Input;
 using NirZonshine.NINA.TwoPointPolarAlignment.Domain;
+using NirZonshine.NINA.TwoPointPolarAlignment.Services;
 
 namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
@@ -67,18 +68,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
     public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer, ITelescopeConsumer {
 
-        private double rotationAmount = 90.0;
-        private RotationMethod method = RotationMethod.Automatic;
-        private RotationDirection direction = RotationDirection.East;
-        private StartingPointMode startingPoint = StartingPointMode.PreRotateHalfRange;
-        private double exposureTime = 2.0;
-        private int gain = 0;
+        private readonly SettingsManager _settingsManager;
         private ImageSource lastFrame;
-        private string filter = "(Current)";
-        private string binning = "1x1";
-        private int offset = 0;
-        private double telescopeMoveRate = 3.0;
-        private int plateSolveRetries = 5;
         private string logs = "[System] Waiting for user interaction...";
         private ICommand startAlignmentCommand;
         private string azimuthError = "--' --\"";
@@ -100,11 +91,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private double simTimeFactor = -1.0;
         private bool blinkToggle = false;
         private double currentSimulationOffset = 0.0;
-        private bool enableOnePointAlignment = false;
         private bool isAltitudePriority = false;
         private bool isAzimuthPriority = false;
         private bool hasRoughFinderSimTriggered = false;
-        private AltitudeKnobDirection altKnobDirection = AltitudeKnobDirection.UpArrow;
         private bool isBlindSolvingActive = false;
         private string statusIndicatorText = "Ready to Start";
         private Brush statusIndicatorColor = StatusIdleColor;
@@ -196,10 +185,17 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             
             group.Freeze(); // Crucial for cross-thread WPF access
             ImageGeometry = group;
-            LoadSettings();
             
-            if (profileService != null) {
-                profileService.ProfileChanged += ProfileService_ProfileChanged;
+            _settingsManager = new SettingsManager(profileService);
+            _settingsManager.PropertyChanged += SettingsManager_PropertyChanged;
+        }
+
+        private void SettingsManager_PropertyChanged(object sender, PropertyChangedEventArgs e) {
+            RaisePropertyChanged(e.PropertyName);
+            if (e.PropertyName == nameof(Method)) {
+                RaisePropertyChanged(nameof(ShowMountWarning));
+                RaisePropertyChanged(nameof(CanRun));
+                RaisePropertyChanged(nameof(CanStart));
             }
         }
 
@@ -213,11 +209,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         public bool ShowMountWarning => !IsMountConnected && Method != RotationMethod.Manual;
 
-        private void ProfileService_ProfileChanged(object sender, EventArgs e) {
-            System.Windows.Application.Current.Dispatcher.Invoke(() => {
-                LoadSettings();
-            });
-        }
+
 
         private void StatusTimer_Tick(object sender, EventArgs e) {
             var currentCamera = IsCameraConnected;
@@ -282,60 +274,33 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public double RotationAmount {
-            get => rotationAmount;
-            set {
-                rotationAmount = value;
-                RaisePropertyChanged(nameof(RotationAmount));
-                SaveSettings();
-            }
+            get => _settingsManager.RotationAmount;
+            set => _settingsManager.RotationAmount = value;
         }
 
         public RotationMethod Method {
-            get => method;
-            set {
-                method = value;
-                RaisePropertyChanged(nameof(Method));
-                RaisePropertyChanged(nameof(ShowMountWarning));
-                RaisePropertyChanged(nameof(CanRun));
-                RaisePropertyChanged(nameof(CanStart));
-                SaveSettings();
-            }
+            get => _settingsManager.Method;
+            set => _settingsManager.Method = value;
         }
 
         public RotationDirection Direction {
-            get => direction;
-            set {
-                direction = value;
-                RaisePropertyChanged(nameof(Direction));
-                SaveSettings();
-            }
+            get => _settingsManager.Direction;
+            set => _settingsManager.Direction = value;
         }
 
         public StartingPointMode StartingPoint {
-            get => startingPoint;
-            set {
-                startingPoint = value;
-                RaisePropertyChanged(nameof(StartingPoint));
-                SaveSettings();
-            }
+            get => _settingsManager.StartingPoint;
+            set => _settingsManager.StartingPoint = value;
         }
 
         public double ExposureTime {
-            get => exposureTime;
-            set {
-                exposureTime = value;
-                RaisePropertyChanged(nameof(ExposureTime));
-                SaveSettings();
-            }
+            get => _settingsManager.ExposureTime;
+            set => _settingsManager.ExposureTime = value;
         }
 
         public int Gain {
-            get => gain;
-            set {
-                gain = value;
-                RaisePropertyChanged(nameof(Gain));
-                SaveSettings();
-            }
+            get => _settingsManager.Gain;
+            set => _settingsManager.Gain = value;
         }
 
         public ImageSource LastFrame {
@@ -347,20 +312,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public string Filter {
-            get => filter;
-            set {
-                filter = value;
-                RaisePropertyChanged(nameof(Filter));
-                SaveSettings();
-            }
+            get => _settingsManager.Filter;
+            set => _settingsManager.Filter = value;
         }
 
         public AltitudeKnobDirection AltKnobDirection {
-            get => altKnobDirection;
+            get => _settingsManager.AltKnobDirection;
             set {
-                altKnobDirection = value;
-                RaisePropertyChanged(nameof(AltKnobDirection));
-                SaveSettings();
+                _settingsManager.AltKnobDirection = value;
                 
                 // Force re-render of current guidance strings if loop is running
                 if (calculatedPolarAxis.X != 0 || calculatedPolarAxis.Y != 0 || calculatedPolarAxis.Z != 0) {
@@ -378,39 +337,23 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public string Binning {
-            get => binning;
-            set {
-                binning = value;
-                RaisePropertyChanged(nameof(Binning));
-                SaveSettings();
-            }
+            get => _settingsManager.Binning;
+            set => _settingsManager.Binning = value;
         }
 
         public int Offset {
-            get => offset;
-            set {
-                offset = value;
-                RaisePropertyChanged(nameof(Offset));
-                SaveSettings();
-            }
+            get => _settingsManager.Offset;
+            set => _settingsManager.Offset = value;
         }
 
         public double TelescopeMoveRate {
-            get => telescopeMoveRate;
-            set {
-                telescopeMoveRate = value;
-                RaisePropertyChanged(nameof(TelescopeMoveRate));
-                SaveSettings();
-            }
+            get => _settingsManager.TelescopeMoveRate;
+            set => _settingsManager.TelescopeMoveRate = value;
         }
 
         public int PlateSolveRetries {
-            get => plateSolveRetries;
-            set {
-                plateSolveRetries = value;
-                RaisePropertyChanged(nameof(PlateSolveRetries));
-                SaveSettings();
-            }
+            get => _settingsManager.PlateSolveRetries;
+            set => _settingsManager.PlateSolveRetries = value;
         }
 
         public string Logs {
@@ -535,15 +478,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public bool EnableOnePointAlignment {
-            get => enableOnePointAlignment;
+            get => _settingsManager.EnableOnePointAlignment;
             set {
-                enableOnePointAlignment = value;
                 if (value) {
                     // User manual interaction resets the simulation trigger so it can fire exactly once more if needed
                     hasRoughFinderSimTriggered = false;
                 }
-                RaisePropertyChanged(nameof(EnableOnePointAlignment));
-                SaveSettings();
+                _settingsManager.EnableOnePointAlignment = value;
             }
         }
 
@@ -2331,107 +2272,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
-        private void SaveSettings() {
-            try {
-                // Optionally delete the legacy standalone file if it exists
-                string ninaFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
-                string legacyFile = System.IO.Path.Combine(ninaFolder, "Plugins", "2-Point Polar Alignment", "settings.json");
-                if (System.IO.File.Exists(legacyFile)) {
-                    try { System.IO.File.Delete(legacyFile); } catch { }
-                }
 
-                var settingsObj = new PluginSettings {
-                    ExposureTime = ExposureTime,
-                    Gain = Gain,
-                    RotationAmount = RotationAmount,
-                    Method = Method,
-                    Direction = Direction,
-                    StartingPoint = StartingPoint,
-                    Filter = Filter,
-                    Binning = Binning,
-                    Offset = Offset,
-                    TelescopeMoveRate = TelescopeMoveRate,
-                    PlateSolveRetries = PlateSolveRetries,
-                    EnableOnePointAlignment = EnableOnePointAlignment,
-                    AltKnobDirection = AltKnobDirection
-                };
-                
-                if (profileService != null) {
-                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(settingsObj);
-                    var pluginSettings = new global::NINA.Profile.PluginOptionsAccessor(profileService, Guid.Parse("0e9e3e58-42fc-4553-8e6e-aba061af4f54"));
-                    pluginSettings.SetValueString("TwoPointPolarAlignment_Settings", json);
-                }
-            } catch (Exception ex) {
-                global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Failed to save settings: {ex.Message}");
-            }
-        }
-
-        private void LoadSettings() {
-            try {
-                if (profileService != null) {
-                    var pluginSettings = new global::NINA.Profile.PluginOptionsAccessor(profileService, Guid.Parse("0e9e3e58-42fc-4553-8e6e-aba061af4f54"));
-                    string json = pluginSettings.GetValueString("TwoPointPolarAlignment_Settings", string.Empty);
-                    
-                    // Fallback to legacy file if profile is empty
-                    if (string.IsNullOrEmpty(json)) {
-                        string ninaFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
-                        string legacyFile = System.IO.Path.Combine(ninaFolder, "Plugins", "2-Point Polar Alignment", "settings.json");
-                        if (System.IO.File.Exists(legacyFile)) {
-                            json = System.IO.File.ReadAllText(legacyFile);
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(json)) {
-                        var settingsObj = Newtonsoft.Json.JsonConvert.DeserializeObject<PluginSettings>(json);
-                        if (settingsObj != null) {
-                            exposureTime = settingsObj.ExposureTime;
-                            RaisePropertyChanged(nameof(ExposureTime));
-                            gain = settingsObj.Gain;
-                            RaisePropertyChanged(nameof(Gain));
-                            rotationAmount = settingsObj.RotationAmount;
-                            RaisePropertyChanged(nameof(RotationAmount));
-                            method = settingsObj.Method;
-                            RaisePropertyChanged(nameof(Method));
-                            direction = settingsObj.Direction;
-                            RaisePropertyChanged(nameof(Direction));
-                            startingPoint = settingsObj.StartingPoint;
-                            RaisePropertyChanged(nameof(StartingPoint));
-                            filter = settingsObj.Filter;
-                            RaisePropertyChanged(nameof(Filter));
-                            binning = settingsObj.Binning;
-                            RaisePropertyChanged(nameof(Binning));
-                            offset = settingsObj.Offset;
-                            RaisePropertyChanged(nameof(Offset));
-                            telescopeMoveRate = settingsObj.TelescopeMoveRate;
-                            RaisePropertyChanged(nameof(TelescopeMoveRate));
-                            plateSolveRetries = settingsObj.PlateSolveRetries;
-                            RaisePropertyChanged(nameof(PlateSolveRetries));
-                            enableOnePointAlignment = settingsObj.EnableOnePointAlignment;
-                            RaisePropertyChanged(nameof(EnableOnePointAlignment));
-                            altKnobDirection = settingsObj.AltKnobDirection;
-                            RaisePropertyChanged(nameof(AltKnobDirection));
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Failed to load settings: {ex.Message}");
-            }
-        }
-
-        public class PluginSettings {
-            public double ExposureTime { get; set; } = 2.0;
-            public int Gain { get; set; } = 0;
-            public double RotationAmount { get; set; } = 90.0;
-            public RotationMethod Method { get; set; } = RotationMethod.Automatic;
-            public RotationDirection Direction { get; set; } = RotationDirection.East;
-            public StartingPointMode StartingPoint { get; set; } = StartingPointMode.PreRotateHalfRange;
-            public string Filter { get; set; } = "(Current)";
-            public string Binning { get; set; } = "1x1";
-            public int Offset { get; set; } = 0;
-            public double TelescopeMoveRate { get; set; } = 3.0;
-            public int PlateSolveRetries { get; set; } = 3;
-            public bool EnableOnePointAlignment { get; set; } = false;
-            public AltitudeKnobDirection AltKnobDirection { get; set; } = AltitudeKnobDirection.UpArrow;
-        }
     }
 }
