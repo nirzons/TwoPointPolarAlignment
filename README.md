@@ -52,6 +52,13 @@ Follow these simple steps to align your mount:
 
 ---
 
+## 🏗️ Developer Documentation
+
+For technical contributors, a comprehensive breakdown of codebase files, logical responsibilities, and precise line metrics is available in the root folder:
+👉 **[Codebase Architecture Overview](codebase_structure_overview.md)**
+
+---
+
 ## 🛠️ Manual Installation Guide (Current Beta)
 
 Until we integrate into the official N.I.N.A. Plugin Store, you can install this beta manually:
