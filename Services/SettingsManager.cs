@@ -9,8 +9,9 @@ using NINA.Core.Utility;
 
 namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
 {
-    public class SettingsManager : INotifyPropertyChanged
+    public class SettingsManager : INotifyPropertyChanged, IDisposable
     {
+        private bool _disposed;
         private readonly IProfileService _profileService;
         private readonly Guid _pluginGuid = Guid.Parse("0e9e3e58-42fc-4553-8e6e-aba061af4f54");
 
@@ -245,6 +246,16 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             catch (Exception ex)
             {
                 Logger.Error($"[2-Point Polar Alignment] Failed to save setting '{key}': {ex.Message}");
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (_profileService != null)
+            {
+                _profileService.ProfileChanged -= ProfileService_ProfileChanged;
             }
         }
 

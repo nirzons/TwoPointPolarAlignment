@@ -85,45 +85,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private bool requestedHome = false;
         private int _taskExecutingFlag = 0; // 0 = idle, 1 = executing (Interlocked for thread-safe access)
         private bool isPreviousAlignmentDimmed = false;
-        private readonly System.Threading.SemaphoreSlim _hardwareInterlock = new System.Threading.SemaphoreSlim(1, 1);
+        // T-3 Fix: Removed duplicate _hardwareInterlock — the controller owns the single interlock instance.
 
-        private async Task<T> ExecuteHardwareOperationAsync<T>(Func<Task<T>> operation, System.Threading.CancellationToken token, string operationName = "Hardware Operation") {
-            bool acquired = false;
-            try {
-                acquired = await _hardwareInterlock.WaitAsync(TimeSpan.FromSeconds(30), token);
-            } catch (OperationCanceledException) {
-                throw; // Graceful abort when the user cancels during wait
-            }
-
-            if (!acquired) {
-                throw new HardwareTeardownTimeoutException($"Hardware driver hung for more than 30 seconds during {operationName}. Safety abort triggered.");
-            }
-
-            try {
-                return await operation();
-            } finally {
-                _hardwareInterlock.Release();
-            }
-        }
-
-        private async Task ExecuteHardwareOperationAsync(Func<Task> operation, System.Threading.CancellationToken token, string operationName = "Hardware Operation") {
-            bool acquired = false;
-            try {
-                acquired = await _hardwareInterlock.WaitAsync(TimeSpan.FromSeconds(30), token);
-            } catch (OperationCanceledException) {
-                throw; // Graceful abort when the user cancels during wait
-            }
-
-            if (!acquired) {
-                throw new HardwareTeardownTimeoutException($"Hardware driver hung for more than 30 seconds during {operationName}. Safety abort triggered.");
-            }
-
-            try {
-                await operation();
-            } finally {
-                _hardwareInterlock.Release();
-            }
-        }
+        // T-3 Fix: ExecuteHardwareOperationAsync removed from VM — HomeAlignment now calls mediator directly.
+        // The controller's _hardwareInterlock guards all workflow hardware ops.
 
         private System.Threading.CancellationTokenSource alignmentCts;
         private Coordinates lastStoppedCoordinates;
@@ -290,6 +255,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
             }
             catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.TimerStop failed: {ex.Message}"); }
+
+            // M-1 Fix: Detach SettingsManager events and dispose to release ProfileChanged subscription
+            try {
+                _settingsManager.PropertyChanged -= SettingsManager_PropertyChanged;
+                _settingsManager.Dispose();
+            }
+            catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.SettingsManager failed: {ex.Message}"); }
 
             try { cameraMediator.RemoveConsumer(this); }
             catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.RemoveCameraConsumer failed: {ex.Message}"); }
@@ -618,7 +590,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                                 epoch,
                                 global::NINA.Astrometry.Coordinates.RAType.Hours
                             );
-                            await ExecuteHardwareOperationAsync(() => telescopeMediator.SlewToCoordinatesAsync(coords, System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Custom Home Slew");
+                            // T-3 Fix: Direct mediator call — VM no longer owns a hardware interlock
+                            await telescopeMediator.SlewToCoordinatesAsync(coords, System.Threading.CancellationToken.None);
                             try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                             Log("Successfully slewed to Custom Polar Home Position.");
                         } else {
@@ -633,8 +606,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                             }
 
                             Log("Dispatching native FindHome command to mount controller...");
-                            // Pass default status tracking progress and no explicit token cancellation
-                            await ExecuteHardwareOperationAsync(() => telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Find Home");
+                            // T-3 Fix: Direct mediator call — VM no longer owns a hardware interlock
+                            await telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), System.Threading.CancellationToken.None);
                             try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                             Log("Successfully returned to Home Position.");
                         }
@@ -680,8 +653,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public void Log(string message) {
-            Logs += $"\n[{DateTime.Now:HH:mm:ss}] {message}";
+            // W-2 Fix: Marshal Logs += to UI thread so PropertyChanged fires on the dispatcher
+            var formatted = $"\n[{DateTime.Now:HH:mm:ss}] {message}";
             global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] {message}");
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => {
+                Logs += formatted;
+            }));
         }
 
 
@@ -890,27 +867,32 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         Owner = System.Windows.Application.Current.MainWindow
                     };
                     
+                    // M-2 Fix: Dispose dialogCts after dialog closes to release unmanaged timer resources
                     var dialogCts = new System.Threading.CancellationTokenSource();
-                    vm.FinishRequested += (s, e) => dialog.DialogResult = true;
-                    dialog.Closed += (s, e) => dialogCts.Cancel();
+                    try {
+                        vm.FinishRequested += (s, e) => dialog.DialogResult = true;
+                        dialog.Closed += (s, e) => dialogCts.Cancel();
                     
-                    vm.SimOffsetRequested += (s, offset) => { context.CurrentSimulationOffset = offset; };
-                    vm.SimResetRequested += (s, e) => { context.CurrentSimulationOffset = 0.0; };
+                        vm.SimOffsetRequested += (s, offset) => { context.CurrentSimulationOffset = offset; };
+                        vm.SimResetRequested += (s, e) => { context.CurrentSimulationOffset = 0.0; };
                     
-                    var manualProgress = new Progress<NirZonshine.NINA.TwoPointPolarAlignment.Domain.ManualTrackingProgress>(p => {
-                        if (p.StatusText != null) vm.StatusText = p.StatusText;
-                        if (p.Thumbnail != null) LastFrame = p.Thumbnail;
-                        if (p.TargetDegrees > 0) {
-                            vm.CurrentDegrees = p.CurrentDegrees;
-                            vm.IsLocked = p.IsLocked;
-                        }
-                    });
+                        var manualProgress = new Progress<NirZonshine.NINA.TwoPointPolarAlignment.Domain.ManualTrackingProgress>(p => {
+                            if (p.StatusText != null) vm.StatusText = p.StatusText;
+                            if (p.Thumbnail != null) LastFrame = p.Thumbnail;
+                            if (p.TargetDegrees > 0) {
+                                vm.CurrentDegrees = p.CurrentDegrees;
+                                vm.IsLocked = p.IsLocked;
+                            }
+                        });
  
-                    var trackingTask = controller.ExecuteManualTrackingAsync(context, targetDegrees, direction, initialCoords, sequence, captureSolver, manualProgress, dialogCts.Token);
+                        var trackingTask = controller.ExecuteManualTrackingAsync(context, targetDegrees, direction, initialCoords, sequence, captureSolver, manualProgress, dialogCts.Token);
                     
-                    dialog.ShowDialog();
-                    dialogCts.Cancel();
-                    try { await trackingTask; } catch { }
+                        dialog.ShowDialog();
+                        dialogCts.Cancel();
+                        try { await trackingTask; } catch { }
+                    } finally {
+                        dialogCts.Dispose();
+                    }
                 });
             };
             

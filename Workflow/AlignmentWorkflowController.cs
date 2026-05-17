@@ -522,8 +522,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     var latProp = info.GetType().GetProperty("Latitude") ?? info.GetType().GetProperty("SiteLatitude");
                     if (latProp != null) return Convert.ToDouble(latProp.GetValue(info));
                 }
-            } catch { }
-            return 45.0; // Fallback
+            } catch (Exception ex) {
+                global::NINA.Core.Utility.Logger.Warning($"[2-Point Polar Alignment] GetLatitude reflection failed: {ex.Message}");
+            }
+            // F-4 Fix: Log fallback so it's not silently swallowed
+            global::NINA.Core.Utility.Logger.Warning("[2-Point Polar Alignment] Could not retrieve site latitude from mount. Using fallback latitude of 45.0°. Solver results may be inaccurate if actual latitude differs significantly.");
+            return 45.0;
         }
 
         private string FormatTotalError(double errorArcmin) {
