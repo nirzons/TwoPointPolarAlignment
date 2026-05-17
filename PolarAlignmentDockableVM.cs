@@ -125,15 +125,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private System.Threading.CancellationTokenSource alignmentCts;
-        private Vector3D calculatedPolarAxis;
-        private Vector3D measurement2Vector;
-        private Vector3D initialPolarAxis;
-        private double simTimeFactor = -1.0;
-        private bool blinkToggle = false;
-        private double currentSimulationOffset = 0.0;
         private bool isAltitudePriority = false;
         private bool isAzimuthPriority = false;
-        private bool hasRoughFinderSimTriggered = false;
         private bool isBlindSolvingActive = false;
         private string statusIndicatorText = "Ready to Start";
         private Brush statusIndicatorColor = StatusIdleColor;
@@ -149,21 +142,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private TelescopeInfo currentTelescopeInfo;
         private bool lastIsCameraConnected;
         private bool lastIsMountConnected;
-        private bool hasExecutedBefore = false;
-        private Coordinates homePosition;
-        private double recordedDec = 0;
-        private double recordedRA = 0;
-        private double recordedHA = 0;
-        private bool hasRecordedPosition = false;
-        private bool hasSuccessfulAlignmentReached = false;
-        private bool wasPreviousRunReversed = false;
-        private Coordinates coordinates1;
-        private double angle1;
-        private Coordinates coordinates2;
-        private double angle2;
-        private double lstMeasurement2;
         private readonly NirZonshine.NINA.TwoPointPolarAlignment.Solvers.IPolarSolver _polarSolver = new NirZonshine.NINA.TwoPointPolarAlignment.Solvers.TwoPointPolarSolver();
-        private AlignmentCalibrationState _activeCalibration;
 
         private static Brush CreateFrozenBrush(string hex) {
             try {
@@ -517,13 +496,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         public bool EnableOnePointAlignment {
             get => _settingsManager.EnableOnePointAlignment;
-            set {
-                if (value) {
-                    // User manual interaction resets the simulation trigger so it can fire exactly once more if needed
-                    hasRoughFinderSimTriggered = false;
-                }
-                _settingsManager.EnableOnePointAlignment = value;
-            }
+            set => _settingsManager.EnableOnePointAlignment = value;
         }
 
         public bool IsRunning {
@@ -576,14 +549,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 Task.Run(async () => {
                     SetStatus("Homing", StatusWarningColor);
                     try {
-                        if (homePosition != null) {
-                            Log($"Slewing back to verified Home Position (RA: {homePosition.RAString}, Dec: {homePosition.DecString}) as requested by HOME button...");
-                            await ExecuteHardwareOperationAsync(() => telescopeMediator.SlewToCoordinatesAsync(homePosition, System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Slew to Home");
-                        } else {
-                            Log("No previous Home state recorded yet. Dispatching native FindHome command to mount controller...");
-                            // Pass default status tracking progress and no explicit token cancellation
-                            await ExecuteHardwareOperationAsync(() => telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Find Home");
-                        }
+                        Log("Dispatching native FindHome command to mount controller...");
+                        // Pass default status tracking progress and no explicit token cancellation
+                        await ExecuteHardwareOperationAsync(() => telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Find Home");
                         try { telescopeMediator.SetTrackingEnabled(false); } catch { }
                         Log("Successfully returned to Home Position.");
                     } catch (Exception ex) {
@@ -718,7 +686,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
             isTaskExecuting = true;
             IsRunning = true;
-            requestedHome = false;
             alignmentCts = new System.Threading.CancellationTokenSource();
             RaisePropertyChanged(nameof(CanStart));
             Task.Run(async () => {
@@ -733,7 +700,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 } finally {
                     IsRunning = false;
                     isTaskExecuting = false;
-                    simTimeFactor = -1.0;
                     RaisePropertyChanged(nameof(CanStart));
                     alignmentCts?.Dispose();
                     alignmentCts = null;
@@ -808,10 +774,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 if (report.TotalErrorRatingColorHex != null) TotalErrorRatingColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
                 if (report.TotalErrorValue > 0 && report.TotalErrorRatingColorHex != null) {
                     TotalErrorColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
-                }
-                
-                if (report.HasSuccessfulAlignmentReached) {
-                    hasSuccessfulAlignmentReached = true;
                 }
             });
 
