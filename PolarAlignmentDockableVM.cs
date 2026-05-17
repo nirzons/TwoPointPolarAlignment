@@ -83,7 +83,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private string totalErrorRating = "Waiting...";
         private bool isRunning = false;
         private bool requestedHome = false;
-        private bool isTaskExecuting = false;
+        private int _taskExecutingFlag = 0; // 0 = idle, 1 = executing (Interlocked for thread-safe access)
         private bool isPreviousAlignmentDimmed = false;
         private readonly System.Threading.SemaphoreSlim _hardwareInterlock = new System.Threading.SemaphoreSlim(1, 1);
 
@@ -538,12 +538,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
-        public bool CanStart => CanRun && !IsRunning && !isTaskExecuting;
+        public bool CanStart => CanRun && !IsRunning && Volatile.Read(ref _taskExecutingFlag) == 0;
 
         public bool CanHome => IsRunning || IsMountConnected;
 
         public ICommand StartAlignmentCommand => startAlignmentCommand ??= new RelayCommand(o => {
-            if (!IsRunning && !isTaskExecuting) {
+            if (!IsRunning && Volatile.Read(ref _taskExecutingFlag) == 0) {
                 StartAlignment();
             }
         });
@@ -555,11 +555,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         public void StopAlignment() {
             if (IsRunning) {
-                IsRunning = false;
                 Log("Stop requested by user. Aborting alignment sequence...");
                 try {
                     alignmentCts?.Cancel();
                 } catch { }
+                IsRunning = false;
                 try {
                     if (telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
                         telescopeMediator.StopSlew();
@@ -580,8 +580,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             if (IsRunning) {
                 requestedHome = true;
                 StopAlignment();
-            } else if (IsMountConnected && !isTaskExecuting) {
-                isTaskExecuting = true;
+            } else if (IsMountConnected && Interlocked.CompareExchange(ref _taskExecutingFlag, 1, 0) == 0) {
                 RaisePropertyChanged(nameof(CanStart));
                 Task.Run(async () => {
                     SetStatus("Homing", StatusWarningColor);
@@ -592,14 +591,22 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                                 bool isNorthern = _profileService.ActiveProfile.AstrometrySettings.Latitude >= 0;
                                 bool targetIsNorthern = _settingsManager.PolarHomeDec >= 0;
                                 if (isNorthern != targetIsNorthern) {
-                                    string hemisphereCurrent = isNorthern ? "Northern" : "Southern";
-                                    string hemisphereTarget = targetIsNorthern ? "Northern" : "Southern";
-                                    string currentPole = isNorthern ? "North" : "South";
-                                    string err = $"Hemisphere Mismatch: The locked Custom Polar Home is in the {hemisphereTarget} Hemisphere ({_settingsManager.PolarHomeDec:F2}°), but your mount is currently configured for the {hemisphereCurrent} Hemisphere.\n\n" +
-                                                 $"Please manually slew near the {currentPole} Celestial Pole and click 'Lock Polar Home' to update your starting position.";
-                                    ShowNinaStyledMessageBox("Hemisphere Mismatch", err);
-                                    Log($"[Error] Custom Home Slew aborted: hemisphere mismatch (current: {hemisphereCurrent}, target: {hemisphereTarget}).");
-                                    return;
+                                    // Auto-reset Polar Home to current position when hemisphere changed
+                                    bool isNearPole = Math.Abs(Math.Abs(currentPosition.Dec) - 90.0) < 1.0;
+                                    if (isNearPole) {
+                                        _settingsManager.PolarHomeRA = currentPosition.RA;
+                                        _settingsManager.PolarHomeDec = currentPosition.Dec;
+                                        Log($"[Polar Home] Hemisphere change detected. Auto-relocked Custom Polar Home to RA: {currentPosition.RA:F2}h, Dec: {currentPosition.Dec:F2}° (new hemisphere).");
+                                    } else {
+                                        string hemisphereCurrent = isNorthern ? "Northern" : "Southern";
+                                        string hemisphereTarget = targetIsNorthern ? "Northern" : "Southern";
+                                        string currentPole = isNorthern ? "North" : "South";
+                                        string err = $"Hemisphere Mismatch: The locked Custom Polar Home is in the {hemisphereTarget} Hemisphere ({_settingsManager.PolarHomeDec:F2}°), but your mount is currently configured for the {hemisphereCurrent} Hemisphere.\n\n" +
+                                                     $"Please manually slew near the {currentPole} Celestial Pole and click 'Lock Polar Home' to update your starting position.";
+                                        ShowNinaStyledMessageBox("Hemisphere Mismatch", err);
+                                        Log($"[Error] Custom Home Slew aborted: hemisphere mismatch (current: {hemisphereCurrent}, target: {hemisphereTarget}).");
+                                        return;
+                                    }
                                 }
                             }
 
@@ -635,7 +642,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                         Log($"[Error] Failed to complete Home directive: {ex.Message}");
                     } finally {
                         SetStatus("Ready to Start", StatusIdleColor);
-                        isTaskExecuting = false;
+                        Interlocked.Exchange(ref _taskExecutingFlag, 0);
                         RaisePropertyChanged(nameof(CanStart));
                     }
                 });
@@ -795,18 +802,41 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         public void StartAlignment() {
-            if (isTaskExecuting) {
+            if (Interlocked.CompareExchange(ref _taskExecutingFlag, 1, 0) != 0) {
                 return;
             }
             IsReversedFlowActive = false;
             IsPreviousAlignmentDimmed = true;
-            isTaskExecuting = true;
             IsRunning = true;
             alignmentCts = new System.Threading.CancellationTokenSource();
             RaisePropertyChanged(nameof(CanStart));
+            // W-3 Fix: Construct Progress<T> on the UI thread so callbacks marshal via SynchronizationContext
+            var progress = new Progress<AlignmentProgressReport>(report => {
+                if (report.LogMessage != null) Log(report.LogMessage);
+                if (report.IsReversedFlowActive.HasValue) IsReversedFlowActive = report.IsReversedFlowActive.Value;
+                if (report.StatusText != null && report.StatusColorHex != null) {
+                    SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
+                }
+                if (report.AltitudeError != null) {
+                    AltitudeError = report.AltitudeError;
+                    IsPreviousAlignmentDimmed = false;
+                }
+                if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
+                if (report.TotalError != null) TotalError = report.TotalError;
+                if (report.TotalErrorValue > 0) TotalErrorValue = report.TotalErrorValue;
+                if (report.AltitudeInstruction != null) AltitudeInstruction = report.AltitudeInstruction;
+                if (report.AzimuthInstruction != null) AzimuthInstruction = report.AzimuthInstruction;
+                IsAltitudePriority = report.IsAltitudePriority;
+                IsAzimuthPriority = report.IsAzimuthPriority;
+                if (report.TotalErrorRating != null) TotalErrorRating = report.TotalErrorRating;
+                if (report.TotalErrorRatingColorHex != null) TotalErrorRatingColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
+                if (report.TotalErrorValue > 0 && report.TotalErrorRatingColorHex != null) {
+                    TotalErrorColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
+                }
+            });
             Task.Run(async () => {
                 try {
-                    await StartAlignmentAsync();
+                    await StartAlignmentAsync(progress);
                 } catch (OperationCanceledException) {
                     Log("Alignment sequence successfully aborted.");
                     Notification.ShowSuccess("2-Point Polar Alignment: Sequence aborted successfully!");
@@ -829,10 +859,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     bool triggerHome = requestedHome;
                     requestedHome = false;
                     IsRunning = false;
-                    isTaskExecuting = false;
+                    Interlocked.Exchange(ref _taskExecutingFlag, 0);
                     RaisePropertyChanged(nameof(CanStart));
-                    alignmentCts?.Dispose();
-                    alignmentCts = null;
+                    var oldCts = Interlocked.Exchange(ref alignmentCts, null);
+                    oldCts?.Dispose();
                     if (triggerHome) {
                         HomeAlignment();
                     }
@@ -840,7 +870,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             });
         }
 
-        private async Task StartAlignmentAsync() {
+        private async Task StartAlignmentAsync(IProgress<AlignmentProgressReport> progress) {
             var cts = alignmentCts ?? throw new InvalidOperationException("Alignment CTS was not initialized.");
             
             var controller = new NirZonshine.NINA.TwoPointPolarAlignment.Workflow.AlignmentWorkflowController(
@@ -888,31 +918,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 return ShowNinaStyledMessageBox(args.Title, args.Message, args.IsYesNo);
             };
  
-            var progress = new Progress<AlignmentProgressReport>(report => {
-                if (report.LogMessage != null) Log(report.LogMessage);
-                if (report.IsReversedFlowActive.HasValue) IsReversedFlowActive = report.IsReversedFlowActive.Value;
-                if (report.StatusText != null && report.StatusColorHex != null) {
-                    SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
-                }
-                if (report.AltitudeError != null) {
-                    AltitudeError = report.AltitudeError;
-                    IsPreviousAlignmentDimmed = false;
-                }
-                if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
-                if (report.TotalError != null) TotalError = report.TotalError;
-                if (report.TotalErrorValue > 0) TotalErrorValue = report.TotalErrorValue;
-                if (report.AltitudeInstruction != null) AltitudeInstruction = report.AltitudeInstruction;
-                if (report.AzimuthInstruction != null) AzimuthInstruction = report.AzimuthInstruction;
-                
-                IsAltitudePriority = report.IsAltitudePriority;
-                IsAzimuthPriority = report.IsAzimuthPriority;
-                
-                if (report.TotalErrorRating != null) TotalErrorRating = report.TotalErrorRating;
-                if (report.TotalErrorRatingColorHex != null) TotalErrorRatingColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
-                if (report.TotalErrorValue > 0 && report.TotalErrorRatingColorHex != null) {
-                    TotalErrorColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
-                }
-            });
+            // Progress<T> is now passed in from StartAlignment() (constructed on UI thread for correct SynchronizationContext)
  
             var context = new AlignmentWorkflowContext {
                 ActiveDirection = Direction,

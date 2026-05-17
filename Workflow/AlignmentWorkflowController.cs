@@ -185,11 +185,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                     bool isNorthern = _profileService.ActiveProfile.AstrometrySettings.Latitude >= 0;
                                     bool targetIsNorthern = _settingsManager.PolarHomeDec >= 0;
                                     if (isNorthern != targetIsNorthern) {
-                                        err = $"Hemisphere Mismatch: The locked Custom Polar Home is in the {(targetIsNorthern ? "Northern" : "Southern")} Hemisphere ({_settingsManager.PolarHomeDec:F2}°), but your mount is configured for the {(isNorthern ? "Northern" : "Southern")} Hemisphere. Please re-lock your Custom Polar Home for the correct hemisphere.";
+                                        // Hemisphere changed — auto-relock if mount is near the correct pole
+                                        if (isNearPole) {
+                                            _settingsManager.PolarHomeRA = currentPosition.RA;
+                                            _settingsManager.PolarHomeDec = currentPosition.Dec;
+                                            ReportLog(progress, $"[Polar Home] Hemisphere change detected. Auto-relocked Custom Polar Home to RA: {currentPosition.RA:F2}h, Dec: {currentPosition.Dec:F2}°.");
+                                            // Re-validate with the new values — position should now match
+                                        } else {
+                                            err = $"Hemisphere Mismatch: The locked Custom Polar Home is in the {(targetIsNorthern ? "Northern" : "Southern")} Hemisphere ({_settingsManager.PolarHomeDec:F2}°), but your mount is configured for the {(isNorthern ? "Northern" : "Southern")} Hemisphere. Please re-lock your Custom Polar Home for the correct hemisphere.";
+                                            ReportLog(progress, $"Error: {err}");
+                                            throw new InvalidOperationException(err);
+                                        }
+                                    } else {
+                                        ReportLog(progress, $"Error: {err}");
+                                        throw new InvalidOperationException(err);
                                     }
+                                } else {
+                                    ReportLog(progress, $"Error: {err}");
+                                    throw new InvalidOperationException(err);
                                 }
-                                ReportLog(progress, $"Error: {err}");
-                                throw new InvalidOperationException(err);
                             } else {
                                 ReportLog(progress, "Telescope successfully validated at Custom Polar Home Position.");
                             }
@@ -318,7 +332,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     
                     double injectedRA = simPos.RA + context.ManualSimBiasRA;
                     if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
-                    double injectedDec = simPos.Dec + context.ManualSimBiasDec;
+                    double injectedDec = Math.Clamp(simPos.Dec + context.ManualSimBiasDec, -89.5, 89.5);
                     
                     if (measurementIndex == 2 && _settingsManager.Method == RotationMethod.Manual) {
                         double baseRA = context.Coordinates1?.RA ?? simPos.RA;

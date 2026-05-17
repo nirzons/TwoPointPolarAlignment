@@ -9,6 +9,16 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
             Vector3D v1 = Vector3D.FromEquatorial(c1);
             Vector3D v2 = Vector3D.FromEquatorial(c2);
 
+            // Position angles from plate solving are defined relative to celestial north (0,0,1).
+            // At Dec exactly ±90°, the tangent plane frame N/E degenerates (N→0, E→0).
+            // Guard: if either measurement is too close to the exact pole, the math is indeterminate.
+            if (Math.Abs(v1.Z) > 0.99999 || Math.Abs(v2.Z) > 0.99999) {
+                throw new InvalidOperationException(
+                    "Plate solve returned coordinates too close to the exact celestial pole (|Dec| > 89.999°). " +
+                    "The solver math requires observations slightly away from the pole. " +
+                    "If using a simulator, ensure the simulated bias moves coordinates off the exact pole.");
+            }
+
             Vector3D N1 = (new Vector3D(0, 0, 1) - v1.Z * v1).Normalize();
             Vector3D E1 = Vector3D.Cross(new Vector3D(0, 0, 1), v1).Normalize();
             double a1Rad = a1 * System.Math.PI / 180.0;
@@ -30,7 +40,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
             double r21 = X2.Y * X1.X + Y2.Y * Y1.X + v2.Y * v1.X;
             double r12 = X2.X * X1.Y + Y2.X * Y1.Y + v2.X * v1.Y;
 
-            Vector3D P = new Vector3D(r32 - r23, r13 - r31, r21 - r12).Normalize();
+            Vector3D pRaw = new Vector3D(r32 - r23, r13 - r31, r21 - r12);
+            if (pRaw.Length < 1e-6) {
+                throw new InvalidOperationException(
+                    "Cannot determine polar axis: the two measurement points are too close together. " +
+                    "Ensure the mount actually rotated between measurements.");
+            }
+            Vector3D P = pRaw.Normalize();
 
             if (siteLatitude >= 0 && P.Z < 0) {
                 P = new Vector3D(-P.X, -P.Y, -P.Z);
