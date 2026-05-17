@@ -1,34 +1,66 @@
 using System;
-using NINA.Astrometry;
-using NirZonshine.NINA.TwoPointPolarAlignment.Domain;
-using NirZonshine.NINA.TwoPointPolarAlignment.Solvers;
+using System.IO;
+using System.Reflection;
+using System.Linq;
+using System.Collections.Generic;
+using NINA.Equipment.Interfaces.Mediator;
 
-namespace ScratchApp {
-    class Program {
-        static void Main(string[] args) {
-            Console.WriteLine("--- Testing TwoPointPolarSolver Offline ---");
-            try {
-                var solver = new TwoPointPolarSolver();
-                
-                // Simulated coordinates for testing
-                var c1 = new Coordinates(18.0, -89.0, Epoch.JNOW, Coordinates.RAType.Hours);
-                var c2 = new Coordinates(20.0, -89.0, Epoch.JNOW, Coordinates.RAType.Hours);
-                double a1 = 45.0;
-                double a2 = 45.0;
-                double siteLat = -45.0;
-                double lstLive = 20.0;
-                
-                var state = solver.Calibrate(c1, a1, c2, a2, lstLive, siteLat);
-                Console.WriteLine($"[Calibrate] Initial Polar Axis Vector: X={state.InitialPolarAxis.X:F5}, Y={state.InitialPolarAxis.Y:F5}, Z={state.InitialPolarAxis.Z:F5}");
+namespace scratch_app
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) =>
+            {
+                try
+                {
+                    string name = resolveArgs.Name.Split(',')[0];
+                    string path = Path.Combine(@"C:\Program Files\N.I.N.A. - Nighttime Imaging 'N' Astronomy", name + ".dll");
+                    if (File.Exists(path))
+                    {
+                        return Assembly.LoadFrom(path);
+                    }
+                }
+                catch {}
+                return null;
+            };
 
-                var err = solver.EvaluateLiveError(c2, lstLive, state, siteLat);
-                Console.WriteLine($"[Evaluate] Total Error: {err.TotalErrorArcmin:F2} arcmin");
-                Console.WriteLine($"[Evaluate] Altitude Error: {err.AltitudeErrorArcmin:F2} arcmin");
-                Console.WriteLine($"[Evaluate] Azimuth Error: {err.AzimuthErrorArcmin:F2} arcmin");
-                
-                Console.WriteLine("--- Test Passed Successfully ---");
-            } catch (Exception ex) {
-                Console.WriteLine($"ERROR: {ex.Message}");
+            Run();
+        }
+
+        static void Run()
+        {
+            try
+            {
+                var mediatorType = typeof(ITelescopeMediator);
+                var allTypes = new List<Type> { mediatorType };
+                allTypes.AddRange(mediatorType.GetInterfaces());
+
+                using (var writer = new StreamWriter("mediator_methods.txt"))
+                {
+                    writer.WriteLine("=== ITelescopeMediator Parent Interfaces ===");
+                    foreach (var iface in mediatorType.GetInterfaces())
+                    {
+                        writer.WriteLine($"- {iface.FullName}");
+                    }
+
+                    writer.WriteLine("\n=== ITelescopeMediator Methods ===");
+                    foreach (var t in allTypes)
+                    {
+                        writer.WriteLine($"--- Interface: {t.Name} ---");
+                        foreach (var m in t.GetMethods())
+                        {
+                            var paras = string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
+                            writer.WriteLine($"- {m.Name}({paras}) -> {m.ReturnType.Name}");
+                        }
+                    }
+                }
+                Console.WriteLine("Done! Results written to mediator_methods.txt");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
             }
         }
     }

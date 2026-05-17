@@ -19,5 +19,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Domain {
         public double ManualSimBiasDec { get; set; }
         
         public bool HasRoughFinderSimTriggered { get; set; }
+        
+        public Coordinates LastStoppedCoordinates { get; set; }
+        public RotationDirection? LastStoppedDirection { get; set; }
     }
 }

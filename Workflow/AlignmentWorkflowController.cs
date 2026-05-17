@@ -132,6 +132,133 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             
             var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
             
+            if (currentPosition != null) {
+                var info = _telescopeMediator.GetInfo();
+                
+                if (info != null && info.Connected) {
+                    bool isNearPole = Math.Abs(Math.Abs(currentPosition.Dec) - 90.0) < 1.0;
+                    
+                    // --- Smart Restart Check ---
+                    bool isSmartRestart = false;
+                    if (context.LastStoppedCoordinates != null) {
+                        double raDiffFromStopped = Math.Abs(currentPosition.RA - context.LastStoppedCoordinates.RA);
+                        if (raDiffFromStopped > 12.0) raDiffFromStopped = 24.0 - raDiffFromStopped;
+                        
+                        double decDiffFromStopped = Math.Abs(currentPosition.Dec - context.LastStoppedCoordinates.Dec);
+                        
+                        // If the RA is within 0.05 hours (0.75 degrees) and DEC is within 0.2 degrees, it's a smart restart!
+                        if (raDiffFromStopped < 0.05 && decDiffFromStopped < 0.2) {
+                            isSmartRestart = true;
+                        }
+                    }
+                    
+                    if (isSmartRestart) {
+                        RotationDirection prevDir = context.LastStoppedDirection ?? _settingsManager.Direction;
+                        context.ActiveDirection = prevDir == RotationDirection.East ? RotationDirection.West : RotationDirection.East;
+                        context.ActivePreRotate = false;
+                        
+                        bool isReversed = context.ActiveDirection != _settingsManager.Direction;
+                        ReportLog(progress, $"🔄 Smart Restart Detected! Mount position did not change since stop. Active Direction: {context.ActiveDirection} (Reversed: {isReversed}).");
+                        progress.Report(new AlignmentProgressReport { IsReversedFlowActive = isReversed });
+                    }
+                    else {
+                        double rotationHours = _settingsManager.RotationAmount / 15.0;
+
+                        // 1. Custom Polar Home Override Check
+                        if (_settingsManager.OverrideMountHome) {
+                            if (!isNearPole) {
+                                string err = $"Declination ({currentPosition.Dec:F2}°) is not close to the Celestial Pole (90°). Custom Polar Home requires starting at the pole.";
+                                ReportLog(progress, $"Error: {err}");
+                                throw new InvalidOperationException(err);
+                            }
+
+                            double raDiff = Math.Abs(currentPosition.RA - _settingsManager.PolarHomeRA);
+                            if (raDiff > 12.0) raDiff = 24.0 - raDiff;
+                            
+                            double decDiff = Math.Abs(currentPosition.Dec - _settingsManager.PolarHomeDec);
+
+                            ReportLog(progress, $"[Custom Home Validation] Current RA: {currentPosition.RA:F2}h, Dec: {currentPosition.Dec:F2}° | Target RA: {_settingsManager.PolarHomeRA:F2}h, Target Dec: {_settingsManager.PolarHomeDec:F2}°");
+
+                            if (raDiff > 0.1 || decDiff > 0.5) {
+                                string err = "Telescope is not positioned at the custom Polar Home. Please slew to Polar Home first.";
+                                if (_profileService?.ActiveProfile?.AstrometrySettings != null) {
+                                    bool isNorthern = _profileService.ActiveProfile.AstrometrySettings.Latitude >= 0;
+                                    bool targetIsNorthern = _settingsManager.PolarHomeDec >= 0;
+                                    if (isNorthern != targetIsNorthern) {
+                                        err = $"Hemisphere Mismatch: The locked Custom Polar Home is in the {(targetIsNorthern ? "Northern" : "Southern")} Hemisphere ({_settingsManager.PolarHomeDec:F2}°), but your mount is configured for the {(isNorthern ? "Northern" : "Southern")} Hemisphere. Please re-lock your Custom Polar Home for the correct hemisphere.";
+                                    }
+                                }
+                                ReportLog(progress, $"Error: {err}");
+                                throw new InvalidOperationException(err);
+                            } else {
+                                ReportLog(progress, "Telescope successfully validated at Custom Polar Home Position.");
+                            }
+                        }
+                        // 2. Primary Check: If the mount explicitly reports it is at Home
+                        else if (info.AtHome) {
+                            ReportLog(progress, "Mount reports it is successfully at the Home Position.");
+                            
+                            // Enforce starting near the pole (polar alignment requirement)
+                            if (!isNearPole) {
+                                string err = $"Mount is at Home, but Declination ({currentPosition.Dec:F2}°) is not close to the Celestial Pole (90°).";
+                                ReportLog(progress, $"Error: {err} Alignment requires starting at the pole.");
+                                
+                                bool physicalHomeAwayFromPole = Math.Abs(currentPosition.Dec) < 45.0;
+                                
+                                if (OnInterventionRequested != null) {
+                                    if (physicalHomeAwayFromPole) {
+                                        await OnInterventionRequested(new RescuePromptArgs {
+                                            Title = "Polar Home Override Required",
+                                            Message = "Your mount's native Home position is pointing away from the Celestial Pole.\n\n" +
+                                                      "This plugin requires starting near the Celestial Pole. Please enable 'Override Mount Home' in settings, slew your mount to its Polar Home position (Declination near 90°), and click 'Lock Polar Home' to configure a custom starting position.",
+                                            IsYesNo = false
+                                        });
+                                    } else {
+                                        await OnInterventionRequested(new RescuePromptArgs {
+                                            Title = "Mount Homing Misaligned",
+                                            Message = $"Your mount reports it is at the Home position, but its Declination ({currentPosition.Dec:F2}°) is not close enough to the Celestial Pole (90°).\n\n" +
+                                                      "Please ensure your mount is properly homed and aligned to its physical index marks, or slew the mount to its true Home position near the pole.",
+                                            IsYesNo = false
+                                        });
+                                    }
+                                }
+                                
+                                if (physicalHomeAwayFromPole) {
+                                    throw new InvalidOperationException(err + " Please configure a custom Polar Home.");
+                                } else {
+                                    throw new InvalidOperationException(err + " Please slew the mount to its true Home position.");
+                                }
+                            }
+                        }
+                        // 3. Strict Check for homing-enabled mounts: if it can find home but is NOT at home, fail
+                        else if (info.CanFindHome) {
+                            string err = "Telescope is not at the Home position. Please use mount controls to FindHome first.";
+                            ReportLog(progress, $"Error: {err}");
+                            throw new InvalidOperationException(err);
+                        }
+                        // 4. Fallback Check: For mounts without physical homing sensors, fall back to dual-axis HA math
+                        else {
+                            double lst = info.SiderealTime;
+                            double currentHA = lst - currentPosition.RA;
+                            if (currentHA < 0) currentHA += 24.0;
+                            if (currentHA >= 24.0) currentHA -= 24.0;
+
+                            bool isNearMeridian = Math.Abs(currentHA) < 0.25 || Math.Abs(currentHA - 24.0) < 0.25;
+
+                            ReportLog(progress, $"[Validation Debug] Dec: {currentPosition.Dec:F2}, RA: {currentPosition.RA:F2}, LST: {lst:F2}, HA: {currentHA:F2}");
+
+                            if (_settingsManager.Method != NirZonshine.NINA.TwoPointPolarAlignment.RotationMethod.Manual) {
+                                if (!isNearPole || !isNearMeridian) {
+                                    string err = "Telescope is not aligned to the Home Index Mark. Please use mount controls to FindHome first.";
+                                    ReportLog(progress, $"Error: {err}");
+                                    throw new InvalidOperationException(err);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (!string.IsNullOrEmpty(_settingsManager.Filter) && _settingsManager.Filter != "(Current)") {
                 FilterInfo targetFilterInfo = new FilterInfo { Name = _settingsManager.Filter, Position = 0 };
                 ReportLog(progress, $"Changing filter to {_settingsManager.Filter}...");
@@ -352,9 +479,19 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             else if (azErr < 0) report.AzimuthInstruction = isNorthern ? "Move Right →" : "← Move Left";
             else report.AzimuthInstruction = "Aligned";
 
-            if (altErr > 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Down ↓" : "Move Down ↺";
-            else if (altErr < 0) report.AltitudeInstruction = _settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow ? "Move Up ↑" : "Move Up ↻";
-            else report.AltitudeInstruction = "Aligned";
+            if (_settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow) {
+                if (altErr > 0) report.AltitudeInstruction = "Move Down ↓";
+                else if (altErr < 0) report.AltitudeInstruction = "Move Up ↑";
+                else report.AltitudeInstruction = "Aligned";
+            } else if (_settingsManager.AltKnobDirection == AltitudeKnobDirection.Clockwise) {
+                if (altErr > 0) report.AltitudeInstruction = "Move Down ↺";
+                else if (altErr < 0) report.AltitudeInstruction = "Move Up ↻";
+                else report.AltitudeInstruction = "Aligned";
+            } else { // AntiClockwise
+                if (altErr > 0) report.AltitudeInstruction = "Move Down ↻";
+                else if (altErr < 0) report.AltitudeInstruction = "Move Up ↺";
+                else report.AltitudeInstruction = "Aligned";
+            }
 
             if (total <= 1.0) { report.TotalErrorRating = "✨ Excellent Alignment"; report.TotalErrorRatingColorHex = "#00FF7F"; }
             else if (total <= 3.0) { report.TotalErrorRating = "🟢 Good Alignment"; report.TotalErrorRatingColorHex = "#98FB98"; }

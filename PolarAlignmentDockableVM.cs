@@ -84,6 +84,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         private bool isRunning = false;
         private bool requestedHome = false;
         private bool isTaskExecuting = false;
+        private bool isPreviousAlignmentDimmed = false;
         private readonly System.Threading.SemaphoreSlim _hardwareInterlock = new System.Threading.SemaphoreSlim(1, 1);
 
         private async Task<T> ExecuteHardwareOperationAsync<T>(Func<Task<T>> operation, System.Threading.CancellationToken token, string operationName = "Hardware Operation") {
@@ -125,6 +126,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private System.Threading.CancellationTokenSource alignmentCts;
+        private Coordinates lastStoppedCoordinates;
+        private RotationDirection? lastStoppedDirection;
         private bool isAltitudePriority = false;
         private bool isAzimuthPriority = false;
         private bool isBlindSolvingActive = false;
@@ -373,6 +376,24 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set => _settingsManager.PlateSolveRetries = value;
         }
 
+        public bool OverrideMountHome {
+            get => _settingsManager.OverrideMountHome;
+            set {
+                _settingsManager.OverrideMountHome = value;
+                RaisePropertyChanged(nameof(OverrideMountHome));
+                RaisePropertyChanged(nameof(OverrideMountHomeIndex));
+            }
+        }
+
+        public int OverrideMountHomeIndex {
+            get => _settingsManager.OverrideMountHome ? 1 : 0;
+            set {
+                _settingsManager.OverrideMountHome = (value == 1);
+                RaisePropertyChanged(nameof(OverrideMountHome));
+                RaisePropertyChanged(nameof(OverrideMountHomeIndex));
+            }
+        }
+
         public string Logs {
             get => logs;
             set {
@@ -426,6 +447,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 totalErrorRatingColor = value;
                 RaisePropertyChanged(nameof(TotalErrorRatingColor));
+            }
+        }
+
+        public bool IsPreviousAlignmentDimmed {
+            get => isPreviousAlignmentDimmed;
+            set {
+                isPreviousAlignmentDimmed = value;
+                RaisePropertyChanged(nameof(IsPreviousAlignmentDimmed));
             }
         }
 
@@ -531,6 +560,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 try {
                     alignmentCts?.Cancel();
                 } catch { }
+                try {
+                    if (telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                        telescopeMediator.StopSlew();
+                        Log("Mount slew stopped immediately.");
+                    }
+                } catch (Exception ex) {
+                    global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] StopSlew failed: {ex.Message}");
+                }
             }
         }
 
@@ -549,11 +586,51 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 Task.Run(async () => {
                     SetStatus("Homing", StatusWarningColor);
                     try {
-                        Log("Dispatching native FindHome command to mount controller...");
-                        // Pass default status tracking progress and no explicit token cancellation
-                        await ExecuteHardwareOperationAsync(() => telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Find Home");
-                        try { telescopeMediator.SetTrackingEnabled(false); } catch { }
-                        Log("Successfully returned to Home Position.");
+                        if (OverrideMountHome) {
+                            var currentPosition = telescopeMediator.GetCurrentPosition();
+                            if (_profileService?.ActiveProfile?.AstrometrySettings != null && currentPosition != null) {
+                                bool isNorthern = _profileService.ActiveProfile.AstrometrySettings.Latitude >= 0;
+                                bool targetIsNorthern = _settingsManager.PolarHomeDec >= 0;
+                                if (isNorthern != targetIsNorthern) {
+                                    string hemisphereCurrent = isNorthern ? "Northern" : "Southern";
+                                    string hemisphereTarget = targetIsNorthern ? "Northern" : "Southern";
+                                    string currentPole = isNorthern ? "North" : "South";
+                                    string err = $"Hemisphere Mismatch: The locked Custom Polar Home is in the {hemisphereTarget} Hemisphere ({_settingsManager.PolarHomeDec:F2}°), but your mount is currently configured for the {hemisphereCurrent} Hemisphere.\n\n" +
+                                                 $"Please manually slew near the {currentPole} Celestial Pole and click 'Lock Polar Home' to update your starting position.";
+                                    ShowNinaStyledMessageBox("Hemisphere Mismatch", err);
+                                    Log($"[Error] Custom Home Slew aborted: hemisphere mismatch (current: {hemisphereCurrent}, target: {hemisphereTarget}).");
+                                    return;
+                                }
+                            }
+
+                            Log("Dispatching custom Polar Home slew command...");
+                            var epoch = currentPosition?.Epoch ?? global::NINA.Astrometry.Epoch.J2000;
+                            var coords = new global::NINA.Astrometry.Coordinates(
+                                _settingsManager.PolarHomeRA,
+                                _settingsManager.PolarHomeDec,
+                                epoch,
+                                global::NINA.Astrometry.Coordinates.RAType.Hours
+                            );
+                            await ExecuteHardwareOperationAsync(() => telescopeMediator.SlewToCoordinatesAsync(coords, System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Custom Home Slew");
+                            try { telescopeMediator.SetTrackingEnabled(false); } catch { }
+                            Log("Successfully slewed to Custom Polar Home Position.");
+                        } else {
+                            var info = telescopeMediator.GetInfo();
+                            var currentPosition = telescopeMediator.GetCurrentPosition();
+                            if (info != null && info.AtHome && currentPosition != null && Math.Abs(currentPosition.Dec) < 45.0) {
+                                string err = "Your mount's native Home position is pointing away from the Celestial Pole (near the Equator/Horizon).\n\n" +
+                                             "Native homing is disabled to prevent incorrect positioning. Please enable 'Override Mount Home' in settings and slew your mount to its Polar Home position near the pole.";
+                                ShowNinaStyledMessageBox("Homing Disabled", err);
+                                Log("[Error] Homing command aborted: native home position points away from Celestial Pole. Please enable 'Override Mount Home' in settings.");
+                                return;
+                            }
+
+                            Log("Dispatching native FindHome command to mount controller...");
+                            // Pass default status tracking progress and no explicit token cancellation
+                            await ExecuteHardwareOperationAsync(() => telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), System.Threading.CancellationToken.None), System.Threading.CancellationToken.None, "Find Home");
+                            try { telescopeMediator.SetTrackingEnabled(false); } catch { }
+                            Log("Successfully returned to Home Position.");
+                        }
                     } catch (Exception ex) {
                         Log($"[Error] Failed to complete Home directive: {ex.Message}");
                     } finally {
@@ -563,6 +640,36 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     }
                 });
             }
+        }
+
+        private ICommand lockPolarHomeCommand;
+        public ICommand LockPolarHomeCommand => lockPolarHomeCommand ??= new RelayCommand(o => {
+            LockPolarHome();
+        });
+
+        public void LockPolarHome() {
+            if (!IsMountConnected) {
+                Log("[Error] Cannot lock Polar Home: Telescope is not connected.");
+                return;
+            }
+            var currentPosition = telescopeMediator.GetCurrentPosition();
+            if (currentPosition == null) {
+                Log("[Error] Cannot lock Polar Home: Could not retrieve current position.");
+                return;
+            }
+            
+            bool isNearPole = Math.Abs(Math.Abs(currentPosition.Dec) - 90.0) < 1.0;
+            if (!isNearPole) {
+                ShowNinaStyledMessageBox("Invalid Position", "Cannot lock Polar Home. Declination must be very close to the Celestial Pole (90°).");
+                Log($"[Error] Cannot lock Polar Home: Declination ({currentPosition.Dec:F2}°) is not close to 90°.");
+                return;
+            }
+
+            _settingsManager.PolarHomeRA = currentPosition.RA;
+            _settingsManager.PolarHomeDec = currentPosition.Dec;
+            
+            Log($"[Polar Home] Locked new Custom Polar Home at RA: {currentPosition.RA:F2}h, Dec: {currentPosition.Dec:F2}°");
+            ShowNinaStyledMessageBox("Success", $"Custom Polar Home successfully locked at:\nRA: {currentPosition.RA:F2}h\nDec: {currentPosition.Dec:F2}°");
         }
 
         public void Log(string message) {
@@ -603,8 +710,15 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // Message
                 grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // Buttons
 
+                var headerColor = Color.FromRgb(0x22, 0xC5, 0x5E); // Default Green
+                if (title.Contains("Error") || title.Contains("Invalid") || title.Contains("Failed") || title.Contains("Required")) {
+                    headerColor = Color.FromRgb(0xE1, 0x1D, 0x48); // Rose Red
+                } else if (title.Contains("Warning")) {
+                    headerColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber Orange
+                }
+
                 var header = new System.Windows.Controls.Border {
-                    Background = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)),
+                    Background = new SolidColorBrush(headerColor),
                     CornerRadius = new System.Windows.CornerRadius(12, 12, 0, 0),
                     Padding = new System.Windows.Thickness(20, 0, 20, 0)
                 };
@@ -658,7 +772,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 var okBtn = new System.Windows.Controls.Button { 
                     Content = isYesNo ? "Yes, Engaged Rescue" : "Acknowledged", MinWidth = 90, Height = 32, Margin = new System.Windows.Thickness(10, 0, 0, 0),
                     Foreground = System.Windows.Media.Brushes.White, FontWeight = System.Windows.FontWeights.Bold, Cursor = System.Windows.Input.Cursors.Hand,
-                    Template = CreateNinaBtnTemplate(Color.FromRgb(0x22, 0xC5, 0x5E))
+                    Template = CreateNinaBtnTemplate(headerColor)
                 };
                 okBtn.Click += (s, e) => { result = true; dialog.DialogResult = true; dialog.Close(); };
                 
@@ -684,6 +798,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             if (isTaskExecuting) {
                 return;
             }
+            IsReversedFlowActive = false;
+            IsPreviousAlignmentDimmed = true;
             isTaskExecuting = true;
             IsRunning = true;
             alignmentCts = new System.Threading.CancellationTokenSource();
@@ -694,15 +810,32 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 } catch (OperationCanceledException) {
                     Log("Alignment sequence successfully aborted.");
                     Notification.ShowSuccess("2-Point Polar Alignment: Sequence aborted successfully!");
+                    try {
+                        if (telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                            var pos = telescopeMediator.GetCurrentPosition();
+                            if (pos != null) {
+                                lastStoppedCoordinates = pos;
+                                lastStoppedDirection = IsReversedFlowActive ? 
+                                    (Direction == RotationDirection.East ? RotationDirection.West : RotationDirection.East) : 
+                                    Direction;
+                                Log($"[Smart Restart] Saved last stopped position: RA {pos.RA:F2}h, Dec {pos.Dec:F2}° (Direction: {lastStoppedDirection})");
+                            }
+                        }
+                    } catch { }
                 } catch (Exception ex) {
                     Log($"[Error] Alignment failed: {ex.Message}");
                     Notification.ShowError($"Alignment failed: {ex.Message}");
                 } finally {
+                    bool triggerHome = requestedHome;
+                    requestedHome = false;
                     IsRunning = false;
                     isTaskExecuting = false;
                     RaisePropertyChanged(nameof(CanStart));
                     alignmentCts?.Dispose();
                     alignmentCts = null;
+                    if (triggerHome) {
+                        HomeAlignment();
+                    }
                 }
             });
         }
@@ -742,7 +875,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                             vm.IsLocked = p.IsLocked;
                         }
                     });
-
+ 
                     var trackingTask = controller.ExecuteManualTrackingAsync(context, targetDegrees, direction, initialCoords, sequence, captureSolver, manualProgress, dialogCts.Token);
                     
                     dialog.ShowDialog();
@@ -754,13 +887,17 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             controller.OnInterventionRequested = async (args) => {
                 return ShowNinaStyledMessageBox(args.Title, args.Message, args.IsYesNo);
             };
-
+ 
             var progress = new Progress<AlignmentProgressReport>(report => {
                 if (report.LogMessage != null) Log(report.LogMessage);
+                if (report.IsReversedFlowActive.HasValue) IsReversedFlowActive = report.IsReversedFlowActive.Value;
                 if (report.StatusText != null && report.StatusColorHex != null) {
                     SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
                 }
-                if (report.AltitudeError != null) AltitudeError = report.AltitudeError;
+                if (report.AltitudeError != null) {
+                    AltitudeError = report.AltitudeError;
+                    IsPreviousAlignmentDimmed = false;
+                }
                 if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
                 if (report.TotalError != null) TotalError = report.TotalError;
                 if (report.TotalErrorValue > 0) TotalErrorValue = report.TotalErrorValue;
@@ -776,11 +913,17 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     TotalErrorColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
                 }
             });
-
+ 
             var context = new AlignmentWorkflowContext {
                 ActiveDirection = Direction,
                 ActivePreRotate = Method == RotationMethod.Automatic && StartingPoint == StartingPointMode.PreRotateHalfRange,
+                LastStoppedCoordinates = lastStoppedCoordinates,
+                LastStoppedDirection = lastStoppedDirection,
             };
+            
+            // Clear lastStoppedCoordinates and lastStoppedDirection so they only apply to the immediately following start command
+            lastStoppedCoordinates = null;
+            lastStoppedDirection = null;
 
             await controller.ExecuteWorkflowAsync(context, cts.Token, progress, thumbnail => {
                 System.Windows.Application.Current.Dispatcher.Invoke(() => { LastFrame = thumbnail; });

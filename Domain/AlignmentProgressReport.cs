@@ -3,6 +3,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Domain {
         public string LogMessage { get; set; }
         public string StatusText { get; set; }
         public string StatusColorHex { get; set; } // e.g. #72BDFF
+        public bool? IsReversedFlowActive { get; set; }
         
         public string AzimuthError { get; set; }
         public string AltitudeError { get; set; }

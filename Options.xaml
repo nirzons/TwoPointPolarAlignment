@@ -228,9 +228,6 @@
                                 <RowDefinition Height="Auto" /> <!-- Inputs Grid -->
                                 <RowDefinition Height="*" MinHeight="100" />    <!-- Logs ScrollViewer -->
                             </Grid.RowDefinitions>
-
-                        <!-- 1. Action Buttons Grid (Moved to the Top) -->
-                        <Grid Grid.Row="0" Margin="0,0,0,12">
                             <Grid.Resources>
                                 <Style x:Key="ActionButtonStyle" TargetType="Button">
                                     <Setter Property="Foreground" Value="White"/>
@@ -264,6 +261,9 @@
                                     </Setter>
                                 </Style>
                             </Grid.Resources>
+
+                        <!-- 1. Action Buttons Grid (Moved to the Top) -->
+                        <Grid Grid.Row="0" Margin="0,0,0,12">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -372,9 +372,23 @@
                             </StackPanel>
                             
                             <!-- Alt Knob Visualization (NEW ROW 4) -->
-                            <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,4,0">
-                                <TextBlock Text="Altitude Knob Turn Visualization" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                            <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,4,0">
+                                <TextBlock Text="Altitude Knob Turn" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding Source={StaticResource AltKnobDirectionValues}}" SelectedItem="{Binding AltKnobDirection}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                            </StackPanel>
+
+                            <!-- Override Mount Home -->
+                            <StackPanel Grid.Row="4" Grid.Column="1" Margin="4,0,4,0">
+                                <TextBlock Text="Override Mount Home" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox SelectedIndex="{Binding OverrideMountHomeIndex}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White">
+                                    <ComboBoxItem Content="False" />
+                                    <ComboBoxItem Content="True" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <!-- Lock Custom Polar Home Button -->
+                            <StackPanel Grid.Row="4" Grid.Column="2" Margin="4,0,0,0" VerticalAlignment="Bottom">
+                                <Button Content="Lock Polar Home" Command="{Binding LockPolarHomeCommand}" Style="{StaticResource ActionButtonStyle}" Background="#E11D48" Height="24" IsEnabled="{Binding OverrideMountHome}" Cursor="Hand" FontSize="10" />
                             </StackPanel>
                         </Grid>
 
@@ -414,6 +428,9 @@
                                     <Setter Property="BorderThickness" Value="1.5"/>
                                     <Setter Property="Background" Value="#201C18"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding IsPreviousAlignmentDimmed}" Value="True">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
@@ -451,6 +468,9 @@
                                     <Setter Property="BorderThickness" Value="1.5"/>
                                     <Setter Property="Background" Value="#201C18"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding IsPreviousAlignmentDimmed}" Value="True">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
@@ -477,6 +497,18 @@
 
                 <!-- Total Error Card -->
                 <Border Grid.Column="2" CornerRadius="8" Background="#1A1A20" BorderThickness="1" BorderBrush="#2D2D35" Padding="15">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#1A1A20"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="BorderBrush" Value="#2D2D35"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPreviousAlignmentDimmed}" Value="True">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                         <TextBlock Text="TOTAL ERROR" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding TotalError}" FontSize="24" FontWeight="Bold" Foreground="{Binding TotalErrorColor}" Margin="0,5,0,5" HorizontalAlignment="Center" />

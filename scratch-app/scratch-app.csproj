@@ -7,8 +7,13 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);nina_template\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NINA.Plugin" Version="3.0.0.2017-beta" />
-    <PackageReference Include="NINA.WPF.Base" Version="3.0.0.2017-beta" />
-    <ProjectReference Include="..\2-Point Polar Alignment.csproj" />
+    <Reference Include="NINA.Equipment">
+      <HintPath>C:\Program Files\N.I.N.A. - Nighttime Imaging 'N' Astronomy\NINA.Equipment.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="NINA.Core">
+      <HintPath>C:\Program Files\N.I.N.A. - Nighttime Imaging 'N' Astronomy\NINA.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 </Project>
