@@ -1,5 +1,18 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.0.3.3 — Adversarial Hardening (2026-05-17)
+
+### 🛡️ Adversarial Hardening & Stability
+- **M-1: SettingsManager Profile-Leak Prevention**: Implemented `IDisposable` in `SettingsManager` and detached the `ProfileChanged` event listener. The View's `Dispose()` now cleanly unbinds the settings service, preventing memory leaks during profile changes.
+- **M-2: Manual Rotation Dialog Leak Fix**: Wrapped the dialog's `CancellationTokenSource` in a `try/finally` block inside the callback wrapper to guarantee proper disposal of unmanaged timer/event resources.
+- **W-1: WPF Static Frozen Brushes**: Replaced per-access dynamic `SolidColorBrush` creations inside `ManualRotationVM` with pre-frozen static readonly brushes. This guarantees thread safety for cross-threaded WPF calls and optimizes CPU cycles.
+- **W-2: Thread-Safe Log Mutations**: Log modifications now utilize `Dispatcher.BeginInvoke` to marshal string updates safely onto the WPF UI thread, preventing cross-threaded property notification crashes.
+- **T-3: Consolidated Hardware Interlocks**: Removed duplicate `SemaphoreSlim` interlock and utility methods from the main ViewModel. The ViewModel now calls mediators directly, deferring interlocks exclusively to the master controller (`AlignmentWorkflowController`).
+- **F-4: Diagnostic GetLatitude Fallbacks**: Configured clear `Logger.Warning` statements within `GetLatitude()` to capture and log reflection failures rather than silently swallowing errors and falling back to 45.0° default latitude.
+
+### 📋 Meta
+- Assembly version updated to `1.0.3.3`.
+
 ## v1.0.3.1 — Safety & UI Enhancements (2026-05-17)
 
 ### 🛡️ Mount Physical Safety

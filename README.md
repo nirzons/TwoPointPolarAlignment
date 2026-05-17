@@ -108,6 +108,9 @@ The codebase recently underwent a massive SOLID refactoring separating the core 
 3. **Reactive UI Bindings** (`\ViewModels`, `\Views`): Lightweight, "dumb" WPF Views and ViewModels (`PolarAlignmentDockableVM`, `ManualRotationWindow`) that strictly ingest `IProgress<T>` DTOs.
 4. **Hardware Safety Interlocks** (`\Services`): Global semaphores preventing ASCOM driver lockups using a strict 30-second `HardwareTeardownTimeoutException` guard.
 
+> [!NOTE]
+> **Adversarial Hardening (v1.0.3.3)**: The entire architectural pipeline has undergone exhaustive adversarial hardening. Core settings services feature leakproof event disposals (`IDisposable`), WPF properties leverage cross-thread static pre-frozen brushes, background string updates are marshaled securely via Dispatcher queues, and hardware interlock mechanisms are strictly centralized in the workflow engine to prevent runtime deadlocks.
+
 For a comprehensive file-by-file breakdown of line counts, structural diagrams, and responsibilities, please see the:
 👉 **[Codebase Architecture Overview](codebase_structure_overview.md)**
 
