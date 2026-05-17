@@ -52,9 +52,15 @@ Follow these simple steps to align your mount:
 
 ---
 
-## 🏗️ Developer Documentation
+## 🏗️ Developer Architecture
 
-For technical contributors, a comprehensive breakdown of codebase files, logical responsibilities, and precise line metrics is available in the root folder:
+The codebase recently underwent a massive SOLID refactoring separating the core into 4 distinct layers:
+1. **Stateless Domain Math** (`\Domain`, `\Math`): Pure 3D vector calculation engine (`TwoPointPolarSolver.cs`) testable fully offline.
+2. **Workflow Orchestrator** (`\Workflow\AlignmentWorkflowController.cs`): The master asynchronous sequencer handling all plate-solving, mount slewing, and hardware timing loops.
+3. **Reactive UI Bindings** (`\ViewModels`, `\Views`): Lightweight, "dumb" WPF Views and ViewModels (`PolarAlignmentDockableVM`, `ManualRotationWindow`) that strictly ingest `IProgress<T>` DTOs.
+4. **Hardware Safety Interlocks** (`\Services`): Global semaphores preventing ASCOM driver lockups using a strict 30-second `HardwareTeardownTimeoutException` guard.
+
+For a comprehensive file-by-file breakdown of line counts, structural diagrams, and responsibilities, please see the:
 👉 **[Codebase Architecture Overview](codebase_structure_overview.md)**
 
 ---
