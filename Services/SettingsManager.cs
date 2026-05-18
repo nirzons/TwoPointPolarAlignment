@@ -27,7 +27,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
         private string _filter = "(Current)";
         private string _binning = "1x1";
         private int _offset = 0;
-        private double _telescopeMoveRate = 3.0;
         private int _plateSolveRetries = 3;
         private bool _enableOnePointAlignment = false;
         private AltitudeKnobDirection _altKnobDirection = AltitudeKnobDirection.UpArrow;
@@ -106,12 +105,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             set { if (_offset != value) { _offset = value; SaveSetting(nameof(Offset), value); OnPropertyChanged(); } }
         }
 
-        public double TelescopeMoveRate
-        {
-            get => _telescopeMoveRate;
-            set { if (_telescopeMoveRate != value) { _telescopeMoveRate = value; SaveSetting(nameof(TelescopeMoveRate), value); OnPropertyChanged(); } }
-        }
-
         public int PlateSolveRetries
         {
             get => _plateSolveRetries;
@@ -172,7 +165,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                 _filter = accessor.GetValueString(nameof(Filter), "(Current)");
                 _binning = accessor.GetValueString(nameof(Binning), "1x1");
                 _offset = accessor.GetValueInt32(nameof(Offset), 0);
-                _telescopeMoveRate = accessor.GetValueDouble(nameof(TelescopeMoveRate), 3.0);
                 _plateSolveRetries = accessor.GetValueInt32(nameof(PlateSolveRetries), 3);
                 _enableOnePointAlignment = accessor.GetValueBoolean(nameof(EnableOnePointAlignment), false);
                 _altKnobDirection = (AltitudeKnobDirection)accessor.GetValueInt32(nameof(AltKnobDirection), (int)AltitudeKnobDirection.UpArrow);
@@ -218,7 +210,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                         accessor.SetValueString(nameof(Filter), settingsObj.Filter ?? "(Current)");
                         accessor.SetValueString(nameof(Binning), settingsObj.Binning ?? "1x1");
                         accessor.SetValueInt32(nameof(Offset), settingsObj.Offset);
-                        accessor.SetValueDouble(nameof(TelescopeMoveRate), settingsObj.TelescopeMoveRate);
                         accessor.SetValueInt32(nameof(PlateSolveRetries), settingsObj.PlateSolveRetries);
                         accessor.SetValueBoolean(nameof(EnableOnePointAlignment), settingsObj.EnableOnePointAlignment);
                         accessor.SetValueInt32(nameof(AltKnobDirection), (int)settingsObj.AltKnobDirection);

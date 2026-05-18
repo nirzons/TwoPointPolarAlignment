@@ -338,11 +338,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set => _settingsManager.Offset = value;
         }
 
-        public double TelescopeMoveRate {
-            get => _settingsManager.TelescopeMoveRate;
-            set => _settingsManager.TelescopeMoveRate = value;
-        }
-
         public int PlateSolveRetries {
             get => _settingsManager.PlateSolveRetries;
             set => _settingsManager.PlateSolveRetries = value;

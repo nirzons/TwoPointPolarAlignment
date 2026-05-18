@@ -354,19 +354,13 @@
                                 <TextBox Text="{Binding Offset, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
 
-                            <!-- Telescope Move Rate -->
-                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
-                                <TextBlock Text="Telescope Move Rate (°/s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding TelescopeMoveRate, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
-                            </StackPanel>
-
                             <!-- Plate Solve Retries -->
-                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,6">
+                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Plate Solve Retries" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
                             <!-- Rough Finder Rescue Option -->
-                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="4,0,0,6">
+                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Rough Finder" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
                                 <CheckBox Content="Rescue Mode" IsChecked="{Binding EnableOnePointAlignment, UpdateSourceTrigger=PropertyChanged}" Foreground="#AADDAA" FontSize="10" FontWeight="SemiBold" Height="24" VerticalContentAlignment="Center" Cursor="Hand" />
                             </StackPanel>
