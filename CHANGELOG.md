@@ -1,5 +1,13 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.0.3.4 — Hardware Safety & Deceleration Control (2026-05-18)
+
+### 🛡️ Mount Physical Safety
+- **Adaptive Slewing Deceleration Guard**: Replaced fixed timing delays with an intelligent, adaptive polling loop querying `telescopeMediator.GetInfo().Slewing`. If homing is requested mid-slew, the plugin issues `StopSlew()`, then queries the mount's real-time motion telemetry every 200ms up to a 5.0-second safety timeout. Homing dispatches instantly once the mount reports a complete physical stop—minimizing user wait time while completely eliminating driver collision bugs on all ASCOM/OnStepX hardware.
+
+### 📋 Meta
+- Assembly version updated to `1.0.3.4`.
+
 ## v1.0.3.3 — Adversarial Hardening (2026-05-17)
 
 ### 🛡️ Adversarial Hardening & Stability

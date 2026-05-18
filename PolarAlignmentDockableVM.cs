@@ -841,6 +841,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     var oldCts = Interlocked.Exchange(ref alignmentCts, null);
                     oldCts?.Dispose();
                     if (triggerHome) {
+                        Log("Waiting for mount to complete deceleration and come to a complete stop...");
+                        int maxPolls = 25; // 5.0 seconds maximum timeout
+                        int poll = 0;
+                        while (telescopeMediator != null && telescopeMediator.GetInfo()?.Slewing == true && poll < maxPolls) {
+                            await Task.Delay(200);
+                            poll++;
+                        }
                         HomeAlignment();
                     }
                 }
