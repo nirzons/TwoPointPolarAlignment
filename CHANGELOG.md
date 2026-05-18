@@ -1,5 +1,24 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.0.3.6 — Rough Finder Target Lock & Smart Restart Isolation (2026-05-18)
+
+### ✨ Smart Restart & State Isolation
+- **Rough Finder State Isolation**: When the operator engages or successfully completes the interactive **Rough Finder Rescue** cycle (achieving the $< 5^\circ$ target zone), the plugin immediately clears any previous Smart Restart coordinates and direction memory. The next starting alignment flow will always initialize as a completely **fresh standard run** in the default direction with homing enabled, preventing any stale or reversed sequence states.
+- **Simulator Spoof Invalidation on Smart Restart**: Disables the $12^\circ$ simulator drift injection on resumed smart restart sequences. Spoofing is now isolated exclusively to completely new runs, matches original beta 1.0 specifications exactly.
+
+### 📋 Meta
+- Assembly version updated to `1.0.3.6`.
+
+## v1.0.3.5 — Rough Finder Rescue Engine & Blind Solve Telemetry (2026-05-18)
+
+### ✨ Feature Restoration & UI Telemetry
+- **Rough Finder Rescue Mode**: Completely restored and modernized the Rough Finder failsafe engine within the new state-decoupled architecture. Under live skies or simulated environments, if a plate solve fails completely or if coordinates point $> 10^\circ$ away from the celestial pole, the application prompts the operator to engage the rescue engine.
+- **Dynamic Blind Solver Warning Banner**: Wired up recursive progress telemetry tracking N.I.N.A.'s active `ApplicationStatus` updates. The plugin automatically detects when a blind solver failover has kicked in (e.g. Astrometry.net or AllSky) and immediately lights up the high-visibility warning banner in the options tab, clearing it once solving succeeds or the frame completes.
+- **Simulation Spoof Verification**: Restored the simulator declination drift injection ($12^\circ$ North/South offset on the first frame when the rescue parameter is active) allowing users to thoroughly test and verify the entire Rough Finder intervention pipeline indoors.
+
+### 📋 Meta
+- Assembly version updated to `1.0.3.5`.
+
 ## v1.0.3.4 — Hardware Safety & Deceleration Control (2026-05-18)
 
 ### 🛡️ Mount Physical Safety

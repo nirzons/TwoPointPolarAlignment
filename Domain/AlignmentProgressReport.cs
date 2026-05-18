@@ -18,6 +18,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Domain {
         public bool IsAltitudePriority { get; set; }
         public bool IsAzimuthPriority { get; set; }
         
+        public bool? IsBlindSolvingActive { get; set; }
+        
         public bool HasSuccessfulAlignmentReached { get; set; }
+        
+        public bool? ClearSmartRestart { get; set; }
     }
 }

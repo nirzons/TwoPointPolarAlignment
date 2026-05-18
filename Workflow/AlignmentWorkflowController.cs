@@ -69,7 +69,29 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             await ExecutePreFlightAsync(context, token, progress);
             await ExecuteInitialPositioningAsync(context, token, progress);
 
-            var result1 = await ExecuteMeasurementLoopAsync(context, token, progress, updateThumbnail, 1);
+            PlateSolveResult result1;
+            try {
+                result1 = await ExecuteMeasurementLoopAsync(context, token, progress, updateThumbnail, 1);
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                if (await AttemptRescueIfNeeded(ex.Message, token, progress, context)) {
+                    ReportLog(progress, "Rough Finder Rescue cycle completed successfully. Sequence halted per operator feedback so user can initialize final high-precision run manually.");
+                    throw new OperationCanceledException("Alignment sequence halted for interactive rescue.");
+                }
+                throw;
+            }
+
+            double distToPole = 90.0 - Math.Abs(result1.Coordinates.Dec);
+            if (distToPole > 10.0) {
+                string failureReason = $"Telescope solved position (Dec {result1.Coordinates.Dec:F2}°) is {distToPole:F1}° away from Celestial Pole (exceeds 10° limit).";
+                if (await AttemptRescueIfNeeded(failureReason, token, progress, context)) {
+                    ReportLog(progress, "Rough Finder Rescue cycle completed successfully. Sequence halted per operator feedback so user can initialize final high-precision run manually.");
+                    throw new OperationCanceledException("Alignment sequence halted for interactive rescue.");
+                } else {
+                    throw new InvalidOperationException(failureReason);
+                }
+            }
             context.Coordinates1 = result1.Coordinates;
             context.Angle1 = result1.PositionAngle;
 
@@ -156,6 +178,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         RotationDirection prevDir = context.LastStoppedDirection ?? _settingsManager.Direction;
                         context.ActiveDirection = prevDir == RotationDirection.East ? RotationDirection.West : RotationDirection.East;
                         context.ActivePreRotate = false;
+                        context.HasRoughFinderSimTriggered = true;
                         
                         bool isReversed = context.ActiveDirection != _settingsManager.Direction;
                         ReportLog(progress, $"🔄 Smart Restart Detected! Mount position did not change since stop. Active Direction: {context.ActiveDirection} (Reversed: {isReversed}).");
@@ -334,6 +357,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
                     double injectedDec = Math.Clamp(simPos.Dec + context.ManualSimBiasDec, -89.5, 89.5);
                     
+                    if (_settingsManager.EnableOnePointAlignment && !context.HasRoughFinderSimTriggered) {
+                        injectedDec = (injectedDec >= 0) ? 78.0 : -78.0;
+                        context.HasRoughFinderSimTriggered = true;
+                        ReportLog(progress, "[Simulator Injection] Rough Finder enabled. Forcing solved coordinate to 12° from pole to trigger rescue intercept.");
+                    }
+                    
                     if (measurementIndex == 2 && _settingsManager.Method == RotationMethod.Manual) {
                         double baseRA = context.Coordinates1?.RA ?? simPos.RA;
                         double baseDec = context.Coordinates1?.Dec ?? simPos.Dec;
@@ -364,12 +393,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         DisableNotifications = true
                     };
 
-                    var solveProgress = new Progress<PlateSolveProgress>(p => { if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail); });
+                    var solveProgress = new Progress<PlateSolveProgress>(p => {
+                        if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail);
+                    });
+                    var appStatusProg = new Progress<ApplicationStatus>(s => {
+                        if (s.Status != null) {
+                            bool isBlind = s.Status.Contains("Astrometry", StringComparison.OrdinalIgnoreCase) ||
+                                           s.Status.Contains("All Sky", StringComparison.OrdinalIgnoreCase) ||
+                                           s.Status.Contains("AllSky", StringComparison.OrdinalIgnoreCase) ||
+                                           s.Status.Contains("Blind", StringComparison.OrdinalIgnoreCase);
+                            progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = isBlind });
+                        }
+                    });
                     try {
-                        var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, new Progress<ApplicationStatus>(), token), token, "Solve Capture");
+                        var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appStatusProg, token), token, "Solve Capture");
                         if (res != null && res.Success) return res;
                     } catch (Exception ex) {
                         ReportLog(progress, $"Internal solve error: {ex.Message}");
+                    } finally {
+                        progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = false });
                     }
                 }
                 ReportLog(progress, $"Attempt {attempt} failed.");
@@ -641,6 +683,138 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     progress.Report(new ManualTrackingProgress { StatusText = "Loop warning: Attempting reconnect..." });
                     await Task.Delay(1500, trackingToken);
                 }
+            }
+        }
+
+        private async Task<bool> AttemptRescueIfNeeded(string failureReason, CancellationToken token, IProgress<AlignmentProgressReport> progress, AlignmentWorkflowContext context) {
+            if (!_settingsManager.EnableOnePointAlignment) return false;
+            ReportLog(progress, $"[Intercept] Polar Alignment condition fail: {failureReason}");
+            
+            bool agree = false;
+            if (OnInterventionRequested != null) {
+                agree = await OnInterventionRequested(new RescuePromptArgs {
+                    Title = "Launch Rough Finder Rescue?",
+                    Message = $"Standard 2-Point alignment requirements not met: {failureReason}\n\n" +
+                              "Would you like to initialize the interactive Rough Finder Rescue Mode?\n\n" +
+                              "The application will perform a recurring tracking loop to guide you within 5 degrees of the celestial pole.",
+                    IsYesNo = true
+                });
+            }
+            
+            if (agree) {
+                await RunRoughFinderEngineAsync(context, token, progress);
+                return true;
+            }
+            return false;
+        }
+
+        private async Task RunRoughFinderEngineAsync(AlignmentWorkflowContext context, CancellationToken rescueToken, IProgress<AlignmentProgressReport> progress) {
+            progress.Report(new AlignmentProgressReport { IsReversedFlowActive = true });
+            ReportStatus(progress, "Rescue Engine Tracking", "#6366F1");
+            ReportLog(progress, "Initializing Rough Finder Rescue Engine Loop...");
+            Notification.ShowSuccess("Rough Finder Rescue Engaged. Watch live telemetry to reach center target zone.");
+            
+            int binVal = 1;
+            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) {
+                int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            }
+
+            CaptureSequence seq = new CaptureSequence {
+                ExposureTime = _settingsManager.ExposureTime,
+                ImageType = "LIGHT",
+                Gain = _settingsManager.Gain,
+                Binning = new BinningMode((short)binVal, (short)binVal),
+                FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                Offset = _settingsManager.Offset,
+                Enabled = true,
+                TotalExposureCount = 1
+            };
+            
+            var profile = _profileService.ActiveProfile;
+            var ps = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+            IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(ps);
+            IPlateSolver blindSolver = context.IsSimulation ? null : _plateSolverFactory.GetBlindSolver(ps);
+            ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, blindSolver, _imagingMediator, _filterWheelMediator);
+
+            int simStep = 0;
+            while (!rescueToken.IsCancellationRequested) {
+                ReportLog(progress, "Rescue Loop: Capturing wide-net frame...");
+                PlateSolveResult res = null;
+                
+                if (context.IsSimulation) {
+                    await Task.Delay(1500, rescueToken);
+                    simStep++;
+                    double lat = GetLatitude();
+                    bool isN = lat >= 0;
+                    double sDec = isN ? Math.Min(89.95, 78.0 + simStep * 2.5) : Math.Max(-89.95, -78.0 - simStep * 2.5); // Simulates converging to the active pole
+                    var p = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, sDec, Epoch.JNOW, Coordinates.RAType.Hours);
+                    res = new PlateSolveResult {
+                        Success = true,
+                        Coordinates = new Coordinates(p.RA, sDec, Epoch.JNOW, Coordinates.RAType.Hours)
+                    };
+                } else {
+                    CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                        Attempts = 1,
+                        ReattemptDelay = TimeSpan.FromSeconds(2),
+                        FocalLength = profile.TelescopeSettings.FocalLength,
+                        PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
+                        Binning = binVal,
+                        SearchRadius = 30.0,
+                        Regions = 5000.0,
+                        MaxObjects = 500,
+                        Coordinates = _telescopeMediator.GetCurrentPosition(),
+                        BlindFailoverEnabled = true,
+                        DisableNotifications = true
+                    };
+                    
+                    var prog = new Progress<PlateSolveProgress>(p => {
+                        // thumbnail ignored in rescue loop as it operates on raw solver
+                    });
+                    var appStatusProg = new Progress<ApplicationStatus>(s => {
+                        if (s.Status != null) {
+                            bool isBlind = s.Status.Contains("Astrometry", StringComparison.OrdinalIgnoreCase) || 
+                                           s.Status.Contains("All Sky", StringComparison.OrdinalIgnoreCase) || 
+                                           s.Status.Contains("AllSky", StringComparison.OrdinalIgnoreCase) ||
+                                           s.Status.Contains("Blind", StringComparison.OrdinalIgnoreCase);
+                            progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = isBlind });
+                        }
+                    });
+                    
+                    try {
+                        res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, prog, appStatusProg, rescueToken), rescueToken, "Solve Capture");
+                    } catch { } finally {
+                        progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = false });
+                    }
+                }
+
+                if (res != null && res.Success) {
+                    var currentCoords = res.Coordinates;
+                    double distToPole = 90.0 - Math.Abs(currentCoords.Dec);
+                    ReportLog(progress, $"Rescue Position Lock: Dec {currentCoords.DecString} ({distToPole:F2}° from pole)");
+
+                    Vector3D mockAxis = Vector3D.FromEquatorial(currentCoords);
+                    double lat = GetLatitude();
+                    if (lat >= 0 && mockAxis.Z < 0) mockAxis = new Vector3D(-mockAxis.X, -mockAxis.Y, -mockAxis.Z);
+                    else if (lat < 0 && mockAxis.Z > 0) mockAxis = new Vector3D(-mockAxis.X, -mockAxis.Y, -mockAxis.Z);
+
+                    ReportAlignmentProgress(progress, mockAxis, currentCoords.RA, lat, currentCoords.RA);
+
+                    if (distToPole < 5.0) {
+                        ReportLog(progress, "★ TARGET ZONE ACQUIRED! Rescued into the < 5.0° radius region.");
+                        if (OnInterventionRequested != null) {
+                            await OnInterventionRequested(new RescuePromptArgs {
+                                Title = "Target Zone Acquired",
+                                Message = "Rescue successful! The telescope is now within 5 degrees of the celestial pole.\n\n" +
+                                          "Please press the standard START ALIGNMENT button again to begin the final high-precision measurement sequence.",
+                                IsYesNo = false
+                            });
+                        }
+                        break;
+                    }
+                } else {
+                    ReportLog(progress, "[Warning] Rescue Solver failed. Adjust scope manually toward true pole and re-check alignment.");
+                }
+                await Task.Delay(1000, rescueToken);
             }
         }
     }

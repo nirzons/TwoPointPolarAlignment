@@ -791,6 +791,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             var progress = new Progress<AlignmentProgressReport>(report => {
                 if (report.LogMessage != null) Log(report.LogMessage);
                 if (report.IsReversedFlowActive.HasValue) IsReversedFlowActive = report.IsReversedFlowActive.Value;
+                if (report.IsBlindSolvingActive.HasValue) IsBlindSolvingActive = report.IsBlindSolvingActive.Value;
                 if (report.StatusText != null && report.StatusColorHex != null) {
                     SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
                 }

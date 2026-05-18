@@ -42,7 +42,7 @@ Follow these simple steps to align your mount:
 - **Exposure & Gain**: Set values that allow your plate solver to reliably detect stars in < 5 seconds.
 - **Rotation Direction**: Set to "East" by default (or "West" depending on meridian clearance).
 - **Rotation Method**: Choose **Automatic** (recommended) for computerized mounts, or **Manual** for push-to trackers.
-- **Rough Finder**: Enable this checkbox to active fully-automated backup Blind Solving rescue if your initial deployment error exceeds normal solver capabilities!
+- **Rough Finder**: Enable this checkbox to activate a fully-automated backup Blind Solving rescue if your initial deployment error exceeds normal solver capabilities!
 - **Alt Knob Visual**: Match the UI arrows to your specific mechanical gearing: standard, clockwise, or counter-clockwise icons.
 
 ### 3. The Alignment Cycle
@@ -109,7 +109,7 @@ The codebase recently underwent a massive SOLID refactoring separating the core 
 4. **Hardware Safety Interlocks** (`\Services`): Global semaphores preventing ASCOM driver lockups using a strict 30-second `HardwareTeardownTimeoutException` guard.
 
 > [!NOTE]
-> **Adversarial Hardening (v1.0.3.3)**: The entire architectural pipeline has undergone exhaustive adversarial hardening. Core settings services feature leakproof event disposals (`IDisposable`), WPF properties leverage cross-thread static pre-frozen brushes, background string updates are marshaled securely via Dispatcher queues, and hardware interlock mechanisms are strictly centralized in the workflow engine to prevent runtime deadlocks.
+> **Adversarial Hardening & Feature Restoration (v1.0.3.5 / v1.0.3.4)**: The entire architectural pipeline has undergone exhaustive adversarial hardening and feature restoration. Core settings services feature leakproof event disposals (`IDisposable`), WPF properties leverage cross-thread static pre-frozen brushes, background string updates are marshaled securely via Dispatcher queues, and hardware interlock mechanisms are strictly centralized in the workflow engine. Additionally, v1.0.3.4 introduced an adaptive 200ms real-time slewing guard querying mount motion telemetry directly to prevent motor collisions, and v1.0.3.5 successfully restored the fully-automated, state-decoupled **Rough Finder Rescue Mode** and integrated real-time blind solver status warning banners.
 
 For a comprehensive file-by-file breakdown of line counts, structural diagrams, and responsibilities, please see the:
 👉 **[Codebase Architecture Overview](codebase_structure_overview.md)**
