@@ -69,7 +69,27 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
             Coordinates correctedC2 = new Coordinates(correctedRa, liveCoordinates.Dec, liveCoordinates.Epoch, Coordinates.RAType.Hours);
             Vector3D v2Live = Vector3D.FromEquatorial(correctedC2);
 
-            Vector3D calculatedPolarAxis = (v2Live - calibration.Measurement2Vector + calibration.InitialPolarAxis).Normalize();
+            // Compute the rotation that maps Measurement2Vector to v2Live, then apply
+            // that same rotation to InitialPolarAxis. This is mathematically correct for
+            // any rotation size, unlike the previous linear approximation which assumed
+            // (v2Live - v2 + P) ≈ rotated P — only valid for infinitesimal rotations.
+            Vector3D v2 = calibration.Measurement2Vector;
+            Vector3D P = calibration.InitialPolarAxis;
+
+            // Rotation axis: cross product of v2 and v2Live (perpendicular to both)
+            Vector3D k = Vector3D.Cross(v2, v2Live);
+            double sinTheta = k.Length;
+            double cosTheta = System.Math.Clamp(Vector3D.Dot(v2, v2Live), -1.0, 1.0);
+
+            if (sinTheta < 1e-12) {
+                // No rotation or 180° rotation — polar axis unchanged
+                return CalculateErrorFromAxis(P, liveCoordinates.RA, lstLive, siteLatitude);
+            }
+
+            k = k.Normalize();
+
+            // Rodrigues' rotation formula: P_rot = P*cos(θ) + (k×P)*sin(θ) + k*(k·P)*(1-cos(θ))
+            Vector3D calculatedPolarAxis = (cosTheta * P + sinTheta * Vector3D.Cross(k, P) + Vector3D.Dot(k, P) * (1.0 - cosTheta) * k).Normalize();
 
             return CalculateErrorFromAxis(calculatedPolarAxis, liveCoordinates.RA, lstLive, siteLatitude);
         }
