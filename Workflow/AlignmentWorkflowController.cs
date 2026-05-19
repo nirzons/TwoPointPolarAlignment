@@ -530,9 +530,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 IsAzimuthPriority = total >= 0.5 && Math.Abs(azErr) > Math.Abs(altErr) + 0.1
             };
 
-            bool isNorthern = latitude >= 0;
-            if (azErr > 0) report.AzimuthInstruction = isNorthern ? "← Move Left" : "Move Right →";
-            else if (azErr < 0) report.AzimuthInstruction = isNorthern ? "Move Right →" : "← Move Left";
+            if (azErr > 0) report.AzimuthInstruction = "← Move Left";
+            else if (azErr < 0) report.AzimuthInstruction = "Move Right →";
             else report.AzimuthInstruction = "Aligned";
 
             if (_settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow) {
