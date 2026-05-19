@@ -1,5 +1,25 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.0.3.8 — Reactive UI Custom Home & Manual Polish (2026-05-19)
+
+### 🎨 Visual & UI Enhancements
+- **Dynamic CUSTOM HOME Button**: The main `[HOME]` button now dynamically transforms to a high-visibility **`[CUSTOM HOME]`** button with a deeper royal/indigo blue background (`#2563EB`) and updated ToolTips when the `Override Mount Home` parameter is toggled to `True`. This provides immediate, premium visual confirmation of the override state.
+- **Alt-Az Example Removal**: Removed confusing Alt-Az mount references from the Custom Home position override cases in the User Manual to focus exclusively on standard equatorial astrophotography workflows.
+- **Lock Polar Home Row Added**: Fully documented the `Lock Polar Home` action button row in the configuration settings table, complete with explicit notices that it is active only when `Override Mount Home` is enabled.
+
+### 📋 Meta
+- Assembly version updated to `1.0.3.8`.
+
+## v1.0.3.7 — Default Settings Optimization & Manual Overhaul (2026-05-18)
+
+### ⚙️ Default Value Enhancements
+- **Plate Solve Retries**: Increased default attempts from `3` to `5` to improve resilience against temporary cloud cover or poor seeing.
+- **Rough Finder Failsafe**: Enabled `Rough Finder` by default to ensure automatic blind solving rescue is immediately available for beginners.
+- **Purged Obsolete Settings**: Completely removed all residual references to the non-existent "One-Point Alignment" backing variables in instructions.
+
+### 📋 Meta
+- Assembly version updated to `1.0.3.7`.
+
 ## v1.0.3.6 — Rough Finder Target Lock & Smart Restart Isolation (2026-05-18)
 
 ### ✨ Smart Restart & State Isolation

@@ -279,7 +279,25 @@
                             <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource ActionButtonStyle}" Content="STOP" Command="{Binding StopAlignmentCommand}" Height="34" IsEnabled="{Binding IsRunning}" Background="#FF4C4C" Margin="0,0,4,0" />
                             
                             <!-- Home Button -->
-                            <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource ActionButtonStyle}" Content="HOME" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Background="#3B82F6" Margin="4,0,0,0" />
+                            <Button Grid.Row="1" Grid.Column="1" Command="{Binding HomeAlignmentCommand}" Height="34" IsEnabled="{Binding CanHome}" Margin="4,0,0,0">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                        <!-- Default states (OverrideMountHome is False) -->
+                                        <Setter Property="Content" Value="HOME" />
+                                        <Setter Property="Background" Value="#3B82F6" />
+                                        <Setter Property="ToolTip" Value="Slew telescope to the mount's native ASCOM Home position." />
+                                        
+                                        <!-- Custom/Override states (OverrideMountHome is True) -->
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OverrideMountHome}" Value="True">
+                                                <Setter Property="Content" Value="CUSTOM HOME" />
+                                                <Setter Property="Background" Value="#2563EB" />
+                                                <Setter Property="ToolTip" Value="Slew telescope to your locked Custom Polar Home position." />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </Grid>
 
                         <!-- 2. Config Header -->

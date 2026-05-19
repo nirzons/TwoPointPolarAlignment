@@ -27,8 +27,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
         private string _filter = "(Current)";
         private string _binning = "1x1";
         private int _offset = 0;
-        private int _plateSolveRetries = 3;
-        private bool _enableOnePointAlignment = false;
+        private int _plateSolveRetries = 5;
+        private bool _enableOnePointAlignment = true;
         private AltitudeKnobDirection _altKnobDirection = AltitudeKnobDirection.UpArrow;
         private bool _overrideMountHome = false;
         private double _polarHomeRA = 0.0;
@@ -165,8 +165,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                 _filter = accessor.GetValueString(nameof(Filter), "(Current)");
                 _binning = accessor.GetValueString(nameof(Binning), "1x1");
                 _offset = accessor.GetValueInt32(nameof(Offset), 0);
-                _plateSolveRetries = accessor.GetValueInt32(nameof(PlateSolveRetries), 3);
-                _enableOnePointAlignment = accessor.GetValueBoolean(nameof(EnableOnePointAlignment), false);
+                _plateSolveRetries = accessor.GetValueInt32(nameof(PlateSolveRetries), 5);
+                _enableOnePointAlignment = accessor.GetValueBoolean(nameof(EnableOnePointAlignment), true);
                 _altKnobDirection = (AltitudeKnobDirection)accessor.GetValueInt32(nameof(AltKnobDirection), (int)AltitudeKnobDirection.UpArrow);
                 _overrideMountHome = accessor.GetValueBoolean(nameof(OverrideMountHome), false);
                 _polarHomeRA = accessor.GetValueDouble(nameof(PolarHomeRA), 0.0);
