@@ -100,3 +100,5 @@ orleans.codegen.cs
 Accord.dll.config
 *.zip
 implementation_plan.md
+scratch/
+scratch-app/
