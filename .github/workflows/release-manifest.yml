@@ -1,0 +1,104 @@
+name: Release & Manifest Generation
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore Dependencies
+      run: dotnet restore
+
+    - name: Build in Release Mode
+      run: dotnet build -c Release --no-restore
+
+    - name: Package Plugin DLL and Assets to ZIP
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        $zipName = "TwoPointPolarAlignment-v$version.zip"
+        Compress-Archive -Path "bin/Release/net8.0-windows/NirZonshine.NINA.TwoPointPolarAlignment.*" -DestinationPath "bin/Release/net8.0-windows/$zipName" -Force
+        echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+    - name: Compute Checksum
+      id: checksum
+      shell: pwsh
+      run: |
+        $zipPath = "bin/Release/net8.0-windows/${{ env.ZIP_NAME }}"
+        $hash = (Get-FileHash -Algorithm SHA256 $zipPath).Hash
+        echo "HASH=$hash" >> $env:GITHUB_OUTPUT
+        echo "Checksum computed: $hash"
+
+    - name: Generate N.I.N.A. Manifest
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        $checksum = "${{ steps.checksum.outputs.HASH }}"
+        
+        $manifest = @{
+            "Name" = "2-Point Polar Alignment"
+            "Identifier" = "0e9e3e58-42fc-4553-8e6e-aba061af4f54"
+            "Author" = "Nir Zonshine"
+            "License" = "MIT"
+            "LicenseURL" = "https://opensource.org/licenses/MIT"
+            "Homepage" = "https://github.com/nirzons/TwoPointPolarAlignment"
+            "Repository" = "https://github.com/nirzons/TwoPointPolarAlignment"
+            "ChangelogURL" = "https://github.com/nirzons/TwoPointPolarAlignment/blob/main/CHANGELOG.md"
+            "Tags" = @("Polar Alignment", "Mount", "Alignment")
+            "Version" = @{
+                "Major" = [int]($version.Split('.')[0])
+                "Minor" = [int]($version.Split('.')[1])
+                "Patch" = [int]($version.Split('.')[2])
+                "Build" = [int]($version.Split('.')[3])
+            }
+            "MinimumApplicationVersion" = @{
+                "Major" = 3
+                "Minor" = 1
+                "Patch" = 0
+                "Build" = 0
+            }
+            "Installer" = @{
+                "URL" = "https://github.com/nirzons/TwoPointPolarAlignment/releases/download/${{ github.ref_name }}/${{ env.ZIP_NAME }}"
+                "Type" = "ZIP"
+                "Checksum" = $checksum
+                "ChecksumType" = "SHA256"
+            }
+            "Descriptions" = @{
+                "ShortDescription" = "Fast polar alignment using home position and a 90° RA rotation"
+                "LongDescription" = "A premium, lightweight, and highly accurate polar alignment plugin for N.I.N.A. (Nighttime Imaging 'N' Astronomy). Achieve precision polar alignment within minutes using a rock-solid 3D rotation matrix solver requiring only two plate-solved images and a short 90-degree RA rotation. Features a glassmorphic WPF dashboard, real-time visual alignment prompt cards, ALT/AZ mechanical rotation direction instructions adapted to your hemisphere, rough-finder blind solve fallback recovery, safety slewing guards, and stale measurement dimming. Fully integrated with N.I.N.A.'s profile and sequence models."
+            }
+        }
+        
+        # Format JSON beautifully
+        $manifestJson = $manifest | ConvertTo-Json -Depth 10
+        New-Item -ItemType Directory -Force -Path "build_artifacts"
+        $manifestJson | Out-File -FilePath "build_artifacts/manifest.json" -Encoding utf8
+        echo "Manifest generated successfully!"
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          bin/Release/net8.0-windows/${{ env.ZIP_NAME }}
+          build_artifacts/manifest.json
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
