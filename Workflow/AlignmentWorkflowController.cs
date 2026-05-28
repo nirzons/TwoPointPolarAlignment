@@ -94,6 +94,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             }
             context.Coordinates1 = result1.Coordinates;
             context.Angle1 = result1.PositionAngle;
+            context.LstMeasurement1 = _telescopeMediator.GetInfo()?.SiderealTime ?? context.Coordinates1.RA;
 
             await ExecuteRotationAsync(context, token, progress, updateThumbnail);
 
@@ -407,7 +408,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     });
                     try {
                         var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appStatusProg, token), token, "Solve Capture");
-                        if (res != null && res.Success) return res;
+                        if (res != null && res.Success) {
+                            return res;
+                        }
                     } catch (Exception ex) {
                         ReportLog(progress, $"Internal solve error: {ex.Message}");
                     } finally {
@@ -461,7 +464,24 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             ReportStatus(progress, "Calculating...", "#6366F1");
 
             double latitude = GetLatitude();
-            var calibration = _polarSolver.Calibrate(context.Coordinates1, context.Angle1, context.Coordinates2, context.Angle2, context.LstMeasurement2, latitude);
+            
+            // 1. Calculate Time-Drift and delta LST
+            double deltaLst = context.LstMeasurement2 - context.LstMeasurement1;
+            if (deltaLst > 12.0) deltaLst -= 24.0;
+            if (deltaLst < -12.0) deltaLst += 24.0;
+            double driftSeconds = deltaLst * 3600.0;
+            double skyDriftArcmin = Math.Abs(driftSeconds) * 15.0 / 60.0;
+
+            // 2. Perform Time-Drift Correction
+            double correctedRa1 = context.Coordinates1.RA + deltaLst;
+            if (correctedRa1 < 0) correctedRa1 += 24.0;
+            if (correctedRa1 >= 24.0) correctedRa1 -= 24.0;
+
+            Coordinates correctedC1 = new Coordinates(correctedRa1, context.Coordinates1.Dec, context.Coordinates1.Epoch, Coordinates.RAType.Hours);
+            ReportLog(progress, $"[LST Correction] Normalized Point 1 RA by {driftSeconds:F1}s ({skyDriftArcmin:F2} arcmin celestial drift) to match LST at Point 2.");
+
+            // 3. Calibrate using normalized Point 1 coordinate
+            var calibration = _polarSolver.Calibrate(correctedC1, context.Angle1, context.Coordinates2, context.Angle2, context.LstMeasurement2, latitude);
             
             ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2);
             progress.Report(new AlignmentProgressReport { HasSuccessfulAlignmentReached = true });
@@ -816,5 +836,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 await Task.Delay(1000, rescueToken);
             }
         }
+
     }
 }
+

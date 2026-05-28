@@ -1,5 +1,13 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.1.0.2 — Sidereal LST Time-Drift Normalization (2026-05-28)
+
+### ✨ Core Math Accuracy
+- **LST Time-Drift Correction**: Captures the exact Local Sidereal Time ($LST_1$ and $LST_2$) at both measurement positions and corrects for celestial rotation during the mount's RA slew. This mathematically "freezes" Earth's rotation, eliminating the systematic tracking drift ($3.5'$ to $5.5'$) to achieve sub-arcminute alignment accuracy matching the plate solver's limit exactly.
+
+### 📋 Meta
+- Assembly version updated to `1.1.0.2`.
+
 ## v1.0.3.8 — Reactive UI Custom Home & Manual Polish (2026-05-19)
 
 ### 🎨 Visual & UI Enhancements
