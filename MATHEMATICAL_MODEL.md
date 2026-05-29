@@ -23,13 +23,13 @@ $$
 v_z = \sin(\delta)
 $$
 
-where $\alpha_{rad} = \alpha \times \frac{15\pi}{180}$ and $\delta$ is converted to radians. The celestial North Pole corresponds to the vector $(0, 0, 1)$.
+where $\alpha\_{rad} = \alpha \times \frac{15\pi}{180}$ and $\delta$ is converted to radians. The celestial North Pole corresponds to the vector $(0, 0, 1)$.
 
 ## 2. Local Sidereal Time (LST) Drift Normalization
 
-A fundamental challenge in multi-point astrometric alignment is the continuous apparent motion of the celestial sphere due to Earth's rotation. During the alignment sequence, mount tracking is disabled to isolate the pure mechanical RA rotation of the mount. Consequently, between the capture of Point 1 ($t_1$) and Point 2 ($t_2$), the sky drifts.
+A fundamental challenge in multi-point astrometric alignment is the continuous apparent motion of the celestial sphere due to Earth's rotation. During the alignment sequence, mount tracking is disabled to isolate the pure mechanical RA rotation of the mount. Consequently, between the capture of Point 1 ($t\_1$) and Point 2 ($t\_2$), the sky drifts.
 
-To eliminate this systematic error, the algorithm applies an LST time-drift normalization. Let $LST_1$ and $LST_2$ be the Local Sidereal Times at the moments of capture for the two points.
+To eliminate this systematic error, the algorithm applies an LST time-drift normalization. Let $LST\_1$ and $LST\_2$ be the Local Sidereal Times at the moments of capture for the two points.
 
 The drift is calculated as:
 
@@ -47,10 +47,10 @@ This ensures that the spatial transformation between Point 1 and Point 2 represe
 
 ## 3. Derivation of the Mechanical Polar Axis
 
-Let $\mathbf{v}_1$ and $\mathbf{v}_2$ be the 3D unit vectors of the normalized Point 1 and Point 2, respectively. The plate solver also provides the Position Angle ($PA$) for both points, representing the camera sensor's rotation relative to celestial North.
+Let $\mathbf{v}\_1$ and $\mathbf{v}\_2$ be the 3D unit vectors of the normalized Point 1 and Point 2, respectively. The plate solver also provides the Position Angle ($PA$) for both points, representing the camera sensor's rotation relative to celestial North.
 
 ### 3.1 Establishing Orthogonal Local Frames
-For each point $i \in \{1, 2\}$, we construct a local orthonormal basis. First, we define the vector pointing to celestial North, orthogonalized against $\mathbf{v}_i$:
+For each point $i \in \{1, 2\}$, we construct a local orthonormal basis. First, we define the vector pointing to celestial North, orthogonalized against $\mathbf{v}\_i$:
 
 $$
 \mathbf{N}_i = \frac{(0,0,1) - v_{i,z} \mathbf{v}_i}{|| (0,0,1) - v_{i,z} \mathbf{v}_i ||}
@@ -62,7 +62,7 @@ $$
 \mathbf{E}_i = \frac{(0,0,1) \times \mathbf{v}_i}{|| (0,0,1) \times \mathbf{v}_i ||}
 $$
 
-Using the camera's Position Angle ($PA_i$), the camera's local Y-axis and X-axis are derived:
+Using the camera's Position Angle ($PA\_i$), the camera's local Y-axis and X-axis are derived:
 
 $$
 \mathbf{Y}_i = \cos(PA_i) \mathbf{N}_i + \sin(PA_i) \mathbf{E}_i
@@ -73,7 +73,7 @@ $$
 $$
 
 ### 3.2 Calculating the Rotation Matrix and Axis
-The mechanical rotation of the mount transitions the basis $(\mathbf{X}_1, \mathbf{Y}_1, \mathbf{v}_1)$ to $(\mathbf{X}_2, \mathbf{Y}_2, \mathbf{v}_2)$. This transition is described by a $3 \times 3$ rotation matrix $R$.
+The mechanical rotation of the mount transitions the basis $(\mathbf{X}\_1, \mathbf{Y}\_1, \mathbf{v}\_1)$ to $(\mathbf{X}\_2, \mathbf{Y}\_2, \mathbf{v}\_2)$. This transition is described by a $3 \times 3$ rotation matrix $R$.
 
 The components of $R$ are calculated via dot products of the basis vectors. The physical axis of rotation, $\mathbf{P}$, corresponds to the eigenvector of $R$ associated with the eigenvalue $\lambda = 1$. It can be extracted algebraically from the skew-symmetric components of $R$:
 
@@ -101,7 +101,7 @@ $$
 r_{12} = \mathbf{X}_{2,x} \mathbf{X}_{1,y} + \mathbf{Y}_{2,x} \mathbf{Y}_{1,y} + \mathbf{v}_{2,x} \mathbf{v}_{1,y}
 $$
 
-The unnormalized axis vector $\mathbf{P}_{raw}$ is given by:
+The unnormalized axis vector $\mathbf{P}\_{raw}$ is given by:
 
 $$
 \mathbf{P}_{raw} = (r_{32} - r_{23}, r_{13} - r_{31}, r_{21} - r_{12})
@@ -111,10 +111,10 @@ Normalizing this vector yields the true unit polar axis $\mathbf{P}$. The direct
 
 ## 4. Live Error Evaluation via Rodrigues' Formula
 
-During the adjustment phase, continuous plate solving provides a live coordinate $\mathbf{v}_{live}$ at time $LST_{live}$. 
-To maintain accuracy, the live coordinate's RA is first corrected for any LST drift that has occurred since the baseline Point 2 ($LST_2$).
+During the adjustment phase, continuous plate solving provides a live coordinate $\mathbf{v}\_{live}$ at time $LST\_{live}$. 
+To maintain accuracy, the live coordinate's RA is first corrected for any LST drift that has occurred since the baseline Point 2 ($LST\_2$).
 
-To determine the current position of the polar axis as the mount is physically adjusted, we compute the rotation required to move the original Point 2 ($\mathbf{v}_2$) to the current live coordinate ($\mathbf{v}_{live}$). 
+To determine the current position of the polar axis as the mount is physically adjusted, we compute the rotation required to move the original Point 2 ($\mathbf{v}\_2$) to the current live coordinate ($\mathbf{v}\_{live}$). 
 
 The rotation axis $\mathbf{k}$ and angle $\theta$ are:
 
@@ -140,10 +140,10 @@ This provides a mathematically rigorous live polar axis that holds true even for
 
 ## 5. Horizontal Error Calculation
 
-Finally, $\mathbf{P}_{calculated}$ is converted into Horizontal coordinates (Altitude and Azimuth) to provide actionable mechanical feedback. 
+Finally, $\mathbf{P}\_{calculated}$ is converted into Horizontal coordinates (Altitude and Azimuth) to provide actionable mechanical feedback. 
 The expected altitude of the true celestial pole is exactly equal to the Site Latitude ($\phi$), and the true azimuth is $0^\circ$ (North) or $180^\circ$ (South).
 
-By computing the Alt/Az of $\mathbf{P}_{calculated}$ and subtracting the true pole Alt/Az coordinates, the algorithm yields the exact orthogonal Altitude and Azimuth error components in arcminutes, directing the user to mechanical alignment.
+By computing the Alt/Az of $\mathbf{P}\_{calculated}$ and subtracting the true pole Alt/Az coordinates, the algorithm yields the exact orthogonal Altitude and Azimuth error components in arcminutes, directing the user to mechanical alignment.
 
 ## 6. Summary
 
