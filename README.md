@@ -47,6 +47,7 @@ The codebase recently underwent a massive SOLID refactoring separating the core 
 
 For a comprehensive file-by-file breakdown of line counts, structural diagrams, and responsibilities, please see the:
 👉 **[Codebase Architecture Overview](codebase_structure_overview.md)**
+👉 **[Mathematical Model Documentation](MATHEMATICAL_MODEL.md)**
 
 ---
 
