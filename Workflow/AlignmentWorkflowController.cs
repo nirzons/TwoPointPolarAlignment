@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
@@ -321,10 +322,17 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             }
         }
 
+        private class SubframeSolveInfo {
+            public PlateSolveResult Result { get; set; }
+            public double Lst { get; set; }
+        }
+
         private async Task<PlateSolveResult> ExecuteMeasurementLoopAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail, int measurementIndex) {
             ReportLog(progress, $"Initiating Phase {(measurementIndex == 1 ? "C" : "E")} (Measurement {measurementIndex})...");
-            ReportStatus(progress, $"Solving Point {measurementIndex}...", "#6366F1");
-
+            
+            int exposuresCount = (int)_settingsManager.ExposuresPerPoint;
+            var successfulSolves = new List<SubframeSolveInfo>();
+            
             int binVal = 1;
             if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) {
                 int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
@@ -348,80 +356,234 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
 
-            for (int attempt = 1; attempt <= _settingsManager.PlateSolveRetries; attempt++) {
+            for (int subframeIndex = 1; subframeIndex <= exposuresCount; subframeIndex++) {
                 token.ThrowIfCancellationRequested();
-                if (context.IsSimulation) {
-                    await Task.Delay(3000, token);
-                    var simPos = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
-                    
-                    double injectedRA = simPos.RA + context.ManualSimBiasRA;
-                    if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
-                    double injectedDec = Math.Clamp(simPos.Dec + context.ManualSimBiasDec, -89.5, 89.5);
-                    
-                    if (_settingsManager.EnableOnePointAlignment && !context.HasRoughFinderSimTriggered) {
-                        injectedDec = (injectedDec >= 0) ? 78.0 : -78.0;
-                        context.HasRoughFinderSimTriggered = true;
-                        ReportLog(progress, "[Simulator Injection] Rough Finder enabled. Forcing solved coordinate to 12° from pole to trigger rescue intercept.");
-                    }
-                    
-                    if (measurementIndex == 2 && _settingsManager.Method == RotationMethod.Manual) {
-                        double baseRA = context.Coordinates1?.RA ?? simPos.RA;
-                        double baseDec = context.Coordinates1?.Dec ?? simPos.Dec;
-                        double offHrs = context.CurrentSimulationOffset / 15.0;
-                        injectedRA = baseRA + (context.ActiveDirection == RotationDirection.East ? offHrs : -offHrs);
-                        if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
-                        injectedDec = baseDec;
-                    }
-
-                    return new PlateSolveResult {
-                        Success = true,
-                        Coordinates = new Coordinates(injectedRA, injectedDec, simPos.Epoch, Coordinates.RAType.Hours),
-                        PositionAngle = measurementIndex == 1 ? 45.0 : context.Angle1
-                    };
+                if (exposuresCount > 1) {
+                    ReportStatus(progress, $"Solving Sub-frame {subframeIndex}/{exposuresCount}...", "#6366F1");
+                    ReportLog(progress, $"Capturing sub-frame {subframeIndex} of {exposuresCount} at Station {measurementIndex}...");
                 } else {
-                    var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
-                    CaptureSolverParameter solverParam = new CaptureSolverParameter {
-                        Attempts = 1,
-                        ReattemptDelay = TimeSpan.FromSeconds(2),
-                        FocalLength = profile.TelescopeSettings.FocalLength,
-                        PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
-                        Binning = binVal,
-                        SearchRadius = 15.0,
-                        Regions = 5000.0,
-                        MaxObjects = 500,
-                        Coordinates = measurementIndex == 1 ? currentPosition : context.Coordinates1, // use 1 as hint for 2
-                        BlindFailoverEnabled = true,
-                        DisableNotifications = true
-                    };
-
-                    var solveProgress = new Progress<PlateSolveProgress>(p => {
-                        if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail);
-                    });
-                    var appStatusProg = new Progress<ApplicationStatus>(s => {
-                        if (s.Status != null) {
-                            bool isBlind = s.Status.Contains("Astrometry", StringComparison.OrdinalIgnoreCase) ||
-                                           s.Status.Contains("All Sky", StringComparison.OrdinalIgnoreCase) ||
-                                           s.Status.Contains("AllSky", StringComparison.OrdinalIgnoreCase) ||
-                                           s.Status.Contains("Blind", StringComparison.OrdinalIgnoreCase);
-                            progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = isBlind });
-                        }
-                    });
-                    try {
-                        var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appStatusProg, token), token, "Solve Capture");
-                        if (res != null && res.Success) {
-                            return res;
-                        }
-                    } catch (Exception ex) {
-                        ReportLog(progress, $"Internal solve error: {ex.Message}");
-                    } finally {
-                        progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = false });
-                    }
+                    ReportStatus(progress, $"Solving Point {measurementIndex}...", "#6366F1");
                 }
-                ReportLog(progress, $"Attempt {attempt} failed.");
-                await Task.Delay(1000, token);
+
+                bool subframeSuccess = false;
+                for (int attempt = 1; attempt <= _settingsManager.PlateSolveRetries; attempt++) {
+                    token.ThrowIfCancellationRequested();
+                    if (context.IsSimulation) {
+                        await Task.Delay(2000, token);
+                        var simPos = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
+                        
+                        double injectedRA = simPos.RA + context.ManualSimBiasRA;
+                        if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
+                        double injectedDec = Math.Clamp(simPos.Dec + context.ManualSimBiasDec, -89.5, 89.5);
+                        
+                        if (_settingsManager.EnableOnePointAlignment && !context.HasRoughFinderSimTriggered) {
+                            injectedDec = (injectedDec >= 0) ? 78.0 : -78.0;
+                            context.HasRoughFinderSimTriggered = true;
+                            ReportLog(progress, "[Simulator Injection] Rough Finder enabled. Forcing solved coordinate to 12° from pole to trigger rescue intercept.");
+                        }
+                        
+                        if (measurementIndex == 2 && _settingsManager.Method == RotationMethod.Manual) {
+                            double baseRA = context.Coordinates1?.RA ?? simPos.RA;
+                            double baseDec = context.Coordinates1?.Dec ?? simPos.Dec;
+                            double offHrs = context.CurrentSimulationOffset / 15.0;
+                            injectedRA = baseRA + (context.ActiveDirection == RotationDirection.East ? offHrs : -offHrs);
+                            if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
+                            injectedDec = baseDec;
+                        }
+
+                        // Simulate atmospheric seeing/jitter on coordinates for double/triple mode (sub-arcminute jitter)
+                        if (exposuresCount > 1 && subframeIndex > 1) {
+                            var rand = new Random();
+                            // Inject up to 20 arcsec of random drift/jitter
+                            double raJitter = (rand.NextDouble() - 0.5) * 20.0 / 3600.0 / 15.0;
+                            double decJitter = (rand.NextDouble() - 0.5) * 20.0 / 3600.0;
+                            injectedRA += raJitter;
+                            injectedDec += decJitter;
+                            if (injectedRA < 0) injectedRA += 24.0; if (injectedRA >= 24.0) injectedRA -= 24.0;
+                            injectedDec = Math.Clamp(injectedDec, -89.5, 89.5);
+                        }
+
+                        var simRes = new PlateSolveResult {
+                            Success = true,
+                            Coordinates = new Coordinates(injectedRA, injectedDec, simPos.Epoch, Coordinates.RAType.Hours),
+                            PositionAngle = measurementIndex == 1 ? 45.0 : context.Angle1
+                        };
+                        successfulSolves.Add(new SubframeSolveInfo {
+                            Result = simRes,
+                            Lst = _telescopeMediator.GetInfo()?.SiderealTime ?? simRes.Coordinates.RA
+                        });
+                        subframeSuccess = true;
+                        break;
+                    } else {
+                        var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
+                        CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                            Attempts = 1,
+                            ReattemptDelay = TimeSpan.FromSeconds(2),
+                            FocalLength = profile.TelescopeSettings.FocalLength,
+                            PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
+                            Binning = binVal,
+                            SearchRadius = 15.0,
+                            Regions = 5000.0,
+                            MaxObjects = 500,
+                            Coordinates = measurementIndex == 1 ? currentPosition : context.Coordinates1,
+                            BlindFailoverEnabled = true,
+                            DisableNotifications = true
+                        };
+
+                        var solveProgress = new Progress<PlateSolveProgress>(p => {
+                            if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail);
+                        });
+                        var appStatusProg = new Progress<ApplicationStatus>(s => {
+                            if (s.Status != null) {
+                                bool isBlind = s.Status.Contains("Astrometry", StringComparison.OrdinalIgnoreCase) ||
+                                               s.Status.Contains("All Sky", StringComparison.OrdinalIgnoreCase) ||
+                                               s.Status.Contains("AllSky", StringComparison.OrdinalIgnoreCase) ||
+                                               s.Status.Contains("Blind", StringComparison.OrdinalIgnoreCase);
+                                progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = isBlind });
+                            }
+                        });
+                        try {
+                            var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appStatusProg, token), token, "Solve Capture");
+                            if (res != null && res.Success) {
+                                successfulSolves.Add(new SubframeSolveInfo {
+                                    Result = res,
+                                    Lst = _telescopeMediator.GetInfo()?.SiderealTime ?? res.Coordinates.RA
+                                });
+                                subframeSuccess = true;
+                                break;
+                            }
+                        } catch (Exception ex) {
+                            ReportLog(progress, $"Internal solve error: {ex.Message}");
+                        } finally {
+                            progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = false });
+                        }
+                    }
+                    ReportLog(progress, $"Attempt {attempt} for sub-frame {subframeIndex} failed.");
+                    await Task.Delay(1000, token);
+                }
+
+                if (!subframeSuccess) {
+                    ReportLog(progress, $"Warning: Sub-frame {subframeIndex}/{exposuresCount} failed to plate-solve.");
+                }
             }
 
-            throw new InvalidOperationException($"Plate solve failed after {_settingsManager.PlateSolveRetries} attempts.");
+            if (successfulSolves.Count == 0) {
+                throw new InvalidOperationException($"Plate solve failed for all sub-frames at measurement point {measurementIndex}.");
+            }
+
+            if (successfulSolves.Count == 1) {
+                var singleRes = successfulSolves[0].Result;
+                if (exposuresCount > 1) {
+                    ReportLog(progress, $"[Multi-Frame Sampling] Only 1 successful sub-frame obtained. Falling back to single frame coordinate (Dec: {singleRes.Coordinates.Dec:F4}°, RA: {singleRes.Coordinates.RA:F4}h).");
+                }
+                return singleRes;
+            }
+
+            // Sub-frame LST Drift Normalization to final anchor LST
+            double lstAnchor = _telescopeMediator.GetInfo()?.SiderealTime ?? successfulSolves[0].Lst;
+            
+            var normalizedResults = new List<PlateSolveResult>();
+            foreach (var solve in successfulSolves) {
+                double deltaLst = lstAnchor - solve.Lst;
+                if (deltaLst > 12.0) deltaLst -= 24.0;
+                if (deltaLst < -12.0) deltaLst += 24.0;
+
+                double correctedRa = solve.Result.Coordinates.RA + deltaLst;
+                if (correctedRa < 0) correctedRa += 24.0;
+                if (correctedRa >= 24.0) correctedRa -= 24.0;
+
+                normalizedResults.Add(new PlateSolveResult {
+                    Success = true,
+                    Coordinates = new Coordinates(correctedRa, solve.Result.Coordinates.Dec, solve.Result.Coordinates.Epoch, Coordinates.RAType.Hours),
+                    PositionAngle = solve.Result.PositionAngle
+                });
+            }
+
+            if (normalizedResults.Count == 2) {
+                var r1 = normalizedResults[0];
+                var r2 = normalizedResults[1];
+                
+                double avgDec = (r1.Coordinates.Dec + r2.Coordinates.Dec) / 2.0;
+                
+                double avgRa = (r1.Coordinates.RA + r2.Coordinates.RA) / 2.0;
+                double raDiff = r1.Coordinates.RA - r2.Coordinates.RA;
+                if (raDiff > 12.0) avgRa = (r1.Coordinates.RA + r2.Coordinates.RA + 24.0) / 2.0;
+                else if (raDiff < -12.0) avgRa = (r1.Coordinates.RA + r2.Coordinates.RA - 24.0) / 2.0;
+                if (avgRa >= 24.0) avgRa -= 24.0;
+                if (avgRa < 0.0) avgRa += 24.0;
+                
+                double avgPa = (r1.PositionAngle + r2.PositionAngle) / 2.0;
+                double paDiff = r1.PositionAngle - r2.PositionAngle;
+                if (paDiff > 180.0) avgPa = (r1.PositionAngle + r2.PositionAngle + 360.0) / 2.0;
+                else if (paDiff < -180.0) avgPa = (r1.PositionAngle + r2.PositionAngle - 360.0) / 2.0;
+                if (avgPa >= 360.0) avgPa -= 360.0;
+                if (avgPa < 0) avgPa += 360.0;
+
+                ReportLog(progress, $"[Multi-Frame Sampling] Double Averaging Success (LST anchor: {lstAnchor:F4}h). Mean coordinate: Dec {avgDec:F4}°, RA {avgRa:F4}h.");
+                return new PlateSolveResult {
+                    Success = true,
+                    Coordinates = new Coordinates(avgRa, avgDec, r1.Coordinates.Epoch, Coordinates.RAType.Hours),
+                    PositionAngle = avgPa
+                };
+            }
+
+            // Triple Mode Outlier Rejection
+            var r_1 = normalizedResults[0];
+            var r_2 = normalizedResults[1];
+            var r_3 = normalizedResults[2];
+
+            Vector3D v1 = Vector3D.FromEquatorial(r_1.Coordinates);
+            Vector3D v2 = Vector3D.FromEquatorial(r_2.Coordinates);
+            Vector3D v3 = Vector3D.FromEquatorial(r_3.Coordinates);
+
+            double d12 = Math.Acos(Math.Clamp(Vector3D.Dot(v1, v2), -1.0, 1.0));
+            double d23 = Math.Acos(Math.Clamp(Vector3D.Dot(v2, v3), -1.0, 1.0));
+            double d13 = Math.Acos(Math.Clamp(Vector3D.Dot(v1, v3), -1.0, 1.0));
+
+            PlateSolveResult keepA, keepB;
+            string outlierLabel;
+
+            if (d12 <= d23 && d12 <= d13) {
+                keepA = r_1;
+                keepB = r_2;
+                outlierLabel = "Sub-frame 3";
+            } else if (d23 <= d12 && d23 <= d13) {
+                keepA = r_2;
+                keepB = r_3;
+                outlierLabel = "Sub-frame 1";
+            } else {
+                keepA = r_1;
+                keepB = r_3;
+                outlierLabel = "Sub-frame 2";
+            }
+
+            double avgDecFinal = (keepA.Coordinates.Dec + keepB.Coordinates.Dec) / 2.0;
+            
+            double avgRaFinal = (keepA.Coordinates.RA + keepB.Coordinates.RA) / 2.0;
+            double raDiffFinal = keepA.Coordinates.RA - keepB.Coordinates.RA;
+            if (raDiffFinal > 12.0) avgRaFinal = (keepA.Coordinates.RA + keepB.Coordinates.RA + 24.0) / 2.0;
+            else if (raDiffFinal < -12.0) avgRaFinal = (keepA.Coordinates.RA + keepB.Coordinates.RA - 24.0) / 2.0;
+            if (avgRaFinal >= 24.0) avgRaFinal -= 24.0;
+            if (avgRaFinal < 0.0) avgRaFinal += 24.0;
+            
+            double avgPaFinal = (keepA.PositionAngle + keepB.PositionAngle) / 2.0;
+            double paDiffFinal = keepA.PositionAngle - keepB.PositionAngle;
+            if (paDiffFinal > 180.0) avgPaFinal = (keepA.PositionAngle + keepB.PositionAngle + 360.0) / 2.0;
+            else if (paDiffFinal < -180.0) avgPaFinal = (keepA.PositionAngle + keepB.PositionAngle - 360.0) / 2.0;
+            if (avgPaFinal >= 360.0) avgPaFinal -= 360.0;
+            if (avgPaFinal < 0) avgPaFinal += 360.0;
+
+            // Log details of outlier rejection
+            double d12Arcsec = d12 * 180.0 / Math.PI * 3600.0;
+            double d23Arcsec = d23 * 180.0 / Math.PI * 3600.0;
+            double d13Arcsec = d13 * 180.0 / Math.PI * 3600.0;
+            ReportLog(progress, $"[Multi-Frame Sampling] Triple Outlier Rejection Success. Separations: d12={d12Arcsec:F1}\", d23={d23Arcsec:F1}\", d13={d13Arcsec:F1}\". Discarded outlier: {outlierLabel}. LST anchor: {lstAnchor:F4}h. Mean coordinate: Dec {avgDecFinal:F4}°, RA {avgRaFinal:F4}h.");
+
+            return new PlateSolveResult {
+                Success = true,
+                Coordinates = new Coordinates(avgRaFinal, avgDecFinal, keepA.Coordinates.Epoch, Coordinates.RAType.Hours),
+                PositionAngle = avgPaFinal
+            };
         }
 
         private async Task ExecuteRotationAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail) {
@@ -550,9 +712,21 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 IsAzimuthPriority = total >= 0.5 && Math.Abs(azErr) > Math.Abs(altErr) + 0.1
             };
 
-            if (azErr > 0) report.AzimuthInstruction = "← Move Left";
-            else if (azErr < 0) report.AzimuthInstruction = "Move Right →";
-            else report.AzimuthInstruction = "Aligned";
+            global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] Calculated Alignment Errors: Alt {report.AltitudeError}, Az {report.AzimuthError} (Alt: {altErr:F1}', Az: {azErr:F1}'), Total: {report.TotalError} ({total:F1}')");
+
+            if (_settingsManager.AzKnobDirection == AzimuthKnobDirection.LeftRightArrow) {
+                if (azErr > 0) report.AzimuthInstruction = "← Move Left";
+                else if (azErr < 0) report.AzimuthInstruction = "Move Right →";
+                else report.AzimuthInstruction = "Aligned";
+            } else if (_settingsManager.AzKnobDirection == AzimuthKnobDirection.Clockwise) {
+                if (azErr > 0) report.AzimuthInstruction = "Move Left ↺";
+                else if (azErr < 0) report.AzimuthInstruction = "Move Right ↻";
+                else report.AzimuthInstruction = "Aligned";
+            } else { // AntiClockwise
+                if (azErr > 0) report.AzimuthInstruction = "Move Left ↻";
+                else if (azErr < 0) report.AzimuthInstruction = "Move Right ↺";
+                else report.AzimuthInstruction = "Aligned";
+            }
 
             if (_settingsManager.AltKnobDirection == AltitudeKnobDirection.UpArrow) {
                 if (altErr > 0) report.AltitudeInstruction = "Move Down ↓";

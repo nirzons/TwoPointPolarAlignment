@@ -30,6 +30,18 @@
         </ObjectDataProvider.MethodParameters>
     </ObjectDataProvider>
 
+    <ObjectDataProvider x:Key="AzKnobDirectionValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+        <ObjectDataProvider.MethodParameters>
+            <x:Type TypeName="local:AzimuthKnobDirection"/>
+        </ObjectDataProvider.MethodParameters>
+    </ObjectDataProvider>
+
+    <ObjectDataProvider x:Key="ExposuresPerPointValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+        <ObjectDataProvider.MethodParameters>
+            <x:Type TypeName="local:ExposuresPerPoint"/>
+        </ObjectDataProvider.MethodParameters>
+    </ObjectDataProvider>
+
     <!-- Static Arrays for Binning and Filters -->
     <x:Array x:Key="BinningValues" Type="{x:Type sys:String}">
         <sys:String>1x1</sys:String>
@@ -311,6 +323,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -383,6 +396,12 @@
                                 <CheckBox Content="Rescue Mode" IsChecked="{Binding EnableOnePointAlignment, UpdateSourceTrigger=PropertyChanged}" Foreground="#AADDAA" FontSize="10" FontWeight="SemiBold" Height="24" VerticalContentAlignment="Center" Cursor="Hand" />
                             </StackPanel>
                             
+                            <!-- Az Knob Visualization -->
+                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="4,0,0,6">
+                                <TextBlock Text="Azimuth Knob Turn" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Source={StaticResource AzKnobDirectionValues}}" SelectedItem="{Binding AzKnobDirection}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" />
+                            </StackPanel>
+                            
                             <!-- Alt Knob Visualization (NEW ROW 4) -->
                             <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,4,0">
                                 <TextBlock Text="Altitude Knob Turn" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
@@ -401,6 +420,12 @@
                             <!-- Lock Custom Polar Home Button -->
                             <StackPanel Grid.Row="4" Grid.Column="2" Margin="4,0,0,0" VerticalAlignment="Bottom">
                                 <Button Content="Lock Polar Home" Command="{Binding LockPolarHomeCommand}" Style="{StaticResource ActionButtonStyle}" Background="#E11D48" Height="24" IsEnabled="{Binding OverrideMountHome}" Cursor="Hand" FontSize="10" />
+                            </StackPanel>
+
+                            <!-- Exposures Per Point -->
+                            <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,6,4,0">
+                                <TextBlock Text="Exposures Per Point" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Source={StaticResource ExposuresPerPointValues}}" SelectedItem="{Binding ExposuresPerPoint}" Height="24" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" ToolTip="Captures multiple consecutive exposures at each of the two alignment positions to average out tracking jitter and filter out bad plate solves due to wind or poor seeing." />
                             </StackPanel>
                         </Grid>
 

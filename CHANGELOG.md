@@ -1,5 +1,32 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.2.0.3 — Multi-Frame Sampling & Outlier Rejection (2026-05-31)
+
+### ✨ Core Math & Robustness
+- **Multi-Frame Sampling**: Added Exposures Per Point setting supporting Single, Double, and Triple sub-frame exposures at each measurement station to average out seeing jitter and wind gusts.
+- **Sub-frame LST Drift Normalization**: Each successful sub-frame coordinate is mathematically normalized to the station's anchor LST before calculations, keeping celestial frames perfectly aligned.
+- **Advanced Spherical Outlier Rejection**: For triple sub-frame exposures, computes great-circle angular distances using 3D unit vectors to isolate and discard the worst coordinate outlier, averaging the two closest solves.
+
+### 📋 Meta
+- Assembly version updated to `1.2.0.3`.
+
+## v1.2.0.2 — Rotary Arrow Options for Azimuth (2026-05-30)
+
+### 🎨 Visual & UI UX Enhancements
+- **Rotary Azimuth Knob Settings**: Added Clockwise (↻) and Counter-Clockwise (↺) rotational arrow instruction capabilities for the Azimuth axis (perfect for mounts with a single horizontal adjustment knob like the AM5 or Wooly base).
+- **Settings UI Expansion**: Integrated the "Azimuth Knob Turn" setting seamlessly into the configuration panel.
+
+### 📋 Meta
+- Assembly version updated to `1.2.0.2`.
+
+## v1.2.0.1 — Phase F Live Alignment Error Logging (2026-05-30)
+
+### ⚙️ Diagnostics & Telemetry
+- **Phase F Live Error Logging**: Restored real-time logging of the calculated polar alignment errors (Altitude, Azimuth, and Total error values) on every live adjustment frame inside `ReportAlignmentProgress`. This ensures the exact alignment error history is safely written to the central N.I.N.A. log files.
+
+### 📋 Meta
+- Assembly version updated to `1.2.0.1`.
+
 ## v1.1.0.2 — Sidereal LST Time-Drift Normalization (2026-05-28)
 
 ### ✨ Core Math Accuracy

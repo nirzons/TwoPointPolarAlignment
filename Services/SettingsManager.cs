@@ -30,6 +30,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
         private int _plateSolveRetries = 5;
         private bool _enableOnePointAlignment = true;
         private AltitudeKnobDirection _altKnobDirection = AltitudeKnobDirection.UpArrow;
+        private AzimuthKnobDirection _azKnobDirection = AzimuthKnobDirection.LeftRightArrow;
+        private ExposuresPerPoint _exposuresPerPoint = ExposuresPerPoint.Single;
         private bool _overrideMountHome = false;
         private double _polarHomeRA = 0.0;
         private double _polarHomeDec = 90.0;
@@ -123,6 +125,18 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             set { if (_altKnobDirection != value) { _altKnobDirection = value; SaveSetting(nameof(AltKnobDirection), (int)value); OnPropertyChanged(); } }
         }
 
+        public AzimuthKnobDirection AzKnobDirection
+        {
+            get => _azKnobDirection;
+            set { if (_azKnobDirection != value) { _azKnobDirection = value; SaveSetting(nameof(AzKnobDirection), (int)value); OnPropertyChanged(); } }
+        }
+
+        public ExposuresPerPoint ExposuresPerPoint
+        {
+            get => _exposuresPerPoint;
+            set { if (_exposuresPerPoint != value) { _exposuresPerPoint = value; SaveSetting(nameof(ExposuresPerPoint), (int)value); OnPropertyChanged(); } }
+        }
+
         public bool OverrideMountHome
         {
             get => _overrideMountHome;
@@ -168,6 +182,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                 _plateSolveRetries = accessor.GetValueInt32(nameof(PlateSolveRetries), 5);
                 _enableOnePointAlignment = accessor.GetValueBoolean(nameof(EnableOnePointAlignment), true);
                 _altKnobDirection = (AltitudeKnobDirection)accessor.GetValueInt32(nameof(AltKnobDirection), (int)AltitudeKnobDirection.UpArrow);
+                _azKnobDirection = (AzimuthKnobDirection)accessor.GetValueInt32(nameof(AzKnobDirection), (int)AzimuthKnobDirection.LeftRightArrow);
+                _exposuresPerPoint = (ExposuresPerPoint)accessor.GetValueInt32(nameof(ExposuresPerPoint), (int)ExposuresPerPoint.Single);
                 _overrideMountHome = accessor.GetValueBoolean(nameof(OverrideMountHome), false);
                 _polarHomeRA = accessor.GetValueDouble(nameof(PolarHomeRA), 0.0);
                 _polarHomeDec = accessor.GetValueDouble(nameof(PolarHomeDec), 90.0);
@@ -213,6 +229,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                         accessor.SetValueInt32(nameof(PlateSolveRetries), settingsObj.PlateSolveRetries);
                         accessor.SetValueBoolean(nameof(EnableOnePointAlignment), settingsObj.EnableOnePointAlignment);
                         accessor.SetValueInt32(nameof(AltKnobDirection), (int)settingsObj.AltKnobDirection);
+                        accessor.SetValueInt32(nameof(AzKnobDirection), (int)settingsObj.AzKnobDirection);
+                        accessor.SetValueInt32(nameof(ExposuresPerPoint), (int)settingsObj.ExposuresPerPoint);
                     }
                 }
                 catch (Exception ex)
@@ -270,6 +288,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             public int PlateSolveRetries { get; set; } = 3;
             public bool EnableOnePointAlignment { get; set; } = false;
             public AltitudeKnobDirection AltKnobDirection { get; set; } = AltitudeKnobDirection.UpArrow;
+            public AzimuthKnobDirection AzKnobDirection { get; set; } = AzimuthKnobDirection.LeftRightArrow;
+            public ExposuresPerPoint ExposuresPerPoint { get; set; } = ExposuresPerPoint.Single;
             public bool OverrideMountHome { get; set; } = false;
             public double PolarHomeRA { get; set; } = 0.0;
             public double PolarHomeDec { get; set; } = 90.0;

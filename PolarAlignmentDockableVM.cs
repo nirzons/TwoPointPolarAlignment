@@ -65,6 +65,18 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         AntiClockwise
     }
 
+    public enum AzimuthKnobDirection {
+        LeftRightArrow,
+        Clockwise,
+        AntiClockwise
+    }
+
+    public enum ExposuresPerPoint {
+        Single = 1,
+        Double = 2,
+        Triple = 3
+    }
+
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
     public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer, ITelescopeConsumer {
 
@@ -318,6 +330,18 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set {
                 _settingsManager.AltKnobDirection = value;
             }
+        }
+
+        public AzimuthKnobDirection AzKnobDirection {
+            get => _settingsManager.AzKnobDirection;
+            set {
+                _settingsManager.AzKnobDirection = value;
+            }
+        }
+
+        public ExposuresPerPoint ExposuresPerPoint {
+            get => _settingsManager.ExposuresPerPoint;
+            set => _settingsManager.ExposuresPerPoint = value;
         }
 
         public bool IsBlindSolvingActive {
