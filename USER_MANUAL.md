@@ -1,24 +1,23 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: Beta v1.0.3.8*
+*Applicable Version: v1.2.1.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
 ---
 
-## 🛠️ Manual Installation Guide (Current Beta)
+## 🛠️ Installation Guide (N.I.N.A. Plugin Store)
 
-Until the plugin is officially published in the N.I.N.A. Plugin Store, please use these steps to install the current beta:
+The plugin is officially published in the centralized N.I.N.A. Plugin Store, making installation a simple, one-click process:
 
-1. **Download**: Navigate to the [GitHub Releases section](https://github.com/nirzons/TwoPointPolarAlignment/releases). Locate the latest release block, expand the **Assets** section, and download **`TwoPointPolarAlignment-Beta-v1.0.3.8.zip`**.
-   - *Tip*: You can also download a PDF version of this manual from the same Assets list for easy offline reference on your tablet or phone under the stars!
-2. **Close N.I.N.A.**: Ensure that N.I.N.A. is not currently running.
-3. **Navigate to Plugins Folder**: Go to your local N.I.N.A. plugins directory in Windows Explorer:
-   `%LocalAppData%\NINA\Plugins\3.0.0\` (Replace `3.0.0` with your target major N.I.N.A. version if different).
-4. **Create Directory**: Create a new folder named `TwoPointPolarAlignment` (if it does not already exist). If the folder is already there, you will overwrite its contents in the next step.
-5. **Extract**: Extract all files from the downloaded zip package directly into that `TwoPointPolarAlignment` folder (replacing/overwriting any existing files if they were present). Make sure the `.dll` files are located in the root of that folder (not nested in a secondary subfolder).
-6. **Activate**: Launch N.I.N.A. and verify that **2-Point Polar Alignment** appears as active in your **Plugins** dashboard. You can add it to your Imaging layout as a dockable tab!
+1. **Launch N.I.N.A.**: Ensure your imaging PC is connected to the internet.
+2. **Navigate to Plugins**: Go to the **Plugins** tab on the left-side navigation panel.
+3. **Browse Available Plugins**: Click on **Available** in the top tab menu.
+4. **Find 2-Point Polar Alignment**: Scroll down to locate **2-Point Polar Alignment** (or use the search bar).
+5. **Install**: Click the **Install** button. N.I.N.A. will automatically download and unpack the correct plugin package.
+6. **Restart N.I.N.A.**: Close and restart N.I.N.A. to activate the plugin. 
+7. **Verify**: Open N.I.N.A. and confirm that **2-Point Polar Alignment** appears active under your **Plugins** -> **Installed** list. You can now add it as a dockable tab to your **Imaging** layout!
 
-<div style="page-break-after: always;"></div>
+---
 
 ## 🚀 Step-by-Step Operation Manual
 
@@ -26,7 +25,7 @@ Until the plugin is officially published in the N.I.N.A. Plugin Store, please us
 1. Connect your **Camera**, **Mount/Telescope**, and **Plate Solver** in N.I.N.A.
 2. Open the **2-Point Polar Alignment** tab.
 3. Ensure your telescope mount is unparked and situated near its Home Position.
-4. Configure your camera exposure, gain, filter, and other hardware properties inside the plugin interface (see the detailed [Configuration Settings](#2-configuration-settings) section below for specific recommended values).
+4. Configure your camera exposure, gain, filter, and other hardware properties inside the plugin interface.
 
 ---
 
@@ -39,7 +38,7 @@ Until the plugin is officially published in the N.I.N.A. Plugin Store, please us
 5. **Redo**: Click **`[Stop]`** and then **`[Start Alignment Sequence]`** again to redo the entire flow in the opposite direction (Smart Restart).
 6. **Finish**: Once satisfied with the alignment, click **`[Stop]`** or **`[HOME]`** to finalize and complete the sequence.
 
-<div style="page-break-after: always;"></div>
+---
 
 ### 2. Configuration Settings
 Before starting, adjust these core parameters in the plugin interface:
@@ -53,15 +52,51 @@ Before starting, adjust these core parameters in the plugin interface:
 | **Direction** | `East` or `West` | Select based on telescope clearance relative to the meridian or tripod legs. |
 | **Rotation Method** | `Automatic` | **Automatic** commands the mount to slew automatically. Choose **Manual** for push-to trackers. |
 | **Starting Point** | `Start at Home` | Defines the sequence start. `Pre-rotate Half Range` moves the mount RA by `-45°` before taking the first shot. |
-| **Filter** | `(Current)` | Wide-band filter (like Luminance/L) to maximize star count, or `(Current)` to use the wheel's active slot. |
+| **Filter** | `(Current)` | Wide-band filter (like Luminance/L) to maximize star count, or `(Current)` to use the active slot. |
 | **Offset** | `0` | The camera offset parameter to use during exposure capture. |
 | **Plate Solve Retries**| `5` | Recommended number of plate solving retry attempts before raising a solve failure warning. |
+| **Exposures Per Point**| `1`, `2`, or `3` | Multi-frame averaging. Captures up to 3 exposures at each station to average out seeing jitter and wind gusts. Uses unit-vector based outlier rejection. |
 | **Rough Finder** | `Enabled` | **Highly recommended!** Automatically activates a backup Blind Solving rescue if your initial deployment error is large. |
 | **Alt Knob Visual** | `Standard` | Map Altitude instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols. |
+| **Azimuth Knob Visual**| `Standard` | Map Azimuth instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols (perfect for single-knob AM5 mounts). |
 | **Override Mount Home**| `False` | Set to `True` to unlock custom celestial home position starting parameters (described in detail below). |
-| **Lock Polar Home** | Action Button | Press to save the mount's active RA/Dec coordinates persistently in your N.I.N.A. profile as the custom starting position (active only when **Override Mount Home** is set to True). |
+| **Lock Polar Home** | Action Button | Press to save the mount's active RA/Dec coordinates persistently in your active profile. |
 
-<div style="page-break-after: always;"></div>
+---
+
+## ⚙️ Advanced Sequencer Integration
+
+Version `1.2.1.0` introduces native integration with N.I.N.A.'s **Advanced Sequencer**, allowing you to automate your polar alignment cycle as part of your nightly sequence!
+
+### 1. Adding the Instruction
+1. Open N.I.N.A.'s **Advanced Sequencer** panel.
+2. In the right-side **Instructions** search bar, type `2-Point Polar Alignment`.
+3. Locate the instruction under the **Polar Alignment** category (represented by our custom curved arc + two stars icon).
+4. Drag and drop it into your sequence list (e.g., at the very start of your target sequence, right after cool-down).
+
+### 2. Live Validation Alerts
+The sequencer item contains a built-in pre-flight validation checker:
+* If your **Camera** or **Telescope Mount** are not connected in N.I.N.A. when you compile or run your sequence, a **red exclamation mark** will light up next to the instruction name in the sequence tree.
+* Hovering over the warning icon will display a clear tooltip: `"Please connect the camera."` and/or `"Please connect the telescope mount."`.
+* Once you connect the equipment, the validation warning will immediately clear.
+
+### 3. Setting Parameter Overrides
+When you click on the sequence block, you will see a polished options grid exposing all 12 configuration parameters.
+* Any values you configure here will act as **temporary overrides**. 
+* When the sequence launches this instruction, these overrides are injected directly into the `SettingsManager` and the main Dockable UI fields will automatically lock (`CanEditSettings = false`) to prevent human interference or UI conflicts.
+* Once the instruction completes, the overrides are cleanly wiped, restoring your default profile settings.
+
+### 4. The "Resume Sequence" Gatekeeper (Manual Alignment Hold)
+When the sequencer executes the instruction:
+1. It unparks the mount and automatically coordinates the starting exposures, slews, and plate solves.
+2. Once the mathematical solver completes, the plugin enters the **Live Adjustments** tuning stage.
+3. The sequencer **pauses and holds** execution on this step, preventing the rest of your target sequence from running while you make physical mechanical adjustments.
+4. Watch the live error dashboard on your PC (or a tablet/phone under the stars) and physically tweak your ALT/AZ knobs.
+5. In the plugin's main Dockable UI, the "Start Alignment" button automatically shifts to display side-by-side with a new purple-accented **`[Resume Sequence]`** button.
+6. Once you are satisfied with the polar error numbers, click the **`[Resume Sequence]`** button.
+7. The plugin instantly halts the live loop, unbinds all settings overrides, unlocks the user interface, marks the sequence item as successful, and N.I.N.A. immediately advances to the next step in your imaging run!
+
+---
 
 ## 🔄 Smart Restart & Mount Safety Control
 
@@ -73,7 +108,7 @@ The plugin includes several safety and automation features:
 * **Immediate Slew Abort**: Clicking **[Stop]** or **[HOME]** at any point in the middle of a telescope slew immediately triggers a hardware-level ASCOM slew abort, halting the mount's motors in their tracks instantly.
 * **Infinite Oscillation**: You can stop and restart the sequence as many times as needed. The safety alternation loop continues indefinitely, toggling the rotation direction back and forth (and turning the green badge on and off accordingly) on each consecutive restart.
 
-<div style="page-break-after: always;"></div>
+---
 
 ## ⚠️ Custom Polar Home Position Override
 
@@ -96,7 +131,7 @@ By default, the plugin expects the mount to start in its native **Home Position*
    - Clicking the **[HOME]** button (which dynamically changes to **[CUSTOM HOME]** when the override is active) will automatically slew the telescope directly to your custom locked coordinates.
    - These locked coordinates are saved persistently within your active N.I.N.A. profile!
 
-<div style="page-break-after: always;"></div>
+---
 
 ## 🧭 Live Adjustment Tips
 
