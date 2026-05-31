@@ -78,9 +78,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
     }
 
     [Export(typeof(global::NINA.Equipment.Interfaces.ViewModel.IDockableVM))]
+    [Export(typeof(PolarAlignmentDockableVM))]
     public class PolarAlignmentDockableVM : DockableVM, ICameraConsumer, ITelescopeConsumer {
 
+        public static PolarAlignmentDockableVM Instance { get; private set; }
+
         private readonly SettingsManager _settingsManager;
+        public SettingsManager SettingsManager => _settingsManager;
         private ImageSource lastFrame;
         private string logs = "[System] Waiting for user interaction...";
         private ICommand startAlignmentCommand;
@@ -150,6 +154,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         [ImportingConstructor]
         public PolarAlignmentDockableVM(IProfileService profileService, ICameraMediator cameraMediator, ITelescopeMediator telescopeMediator, IPlateSolverFactory plateSolverFactory, IImagingMediator imagingMediator, IFilterWheelMediator filterWheelMediator) : base(profileService) {
+            Instance = this;
             this._profileService = profileService;
             this.cameraMediator = cameraMediator;
             this.telescopeMediator = telescopeMediator;
@@ -280,6 +285,37 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
             try { telescopeMediator.RemoveConsumer(this); }
             catch (Exception ex) { global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Dispose.RemoveTelescopeConsumer failed: {ex.Message}"); }
+        }
+
+        private NirZonshine.NINA.TwoPointPolarAlignment.TwoPointPolarAlignmentSequenceItem runningSequenceItem;
+        public NirZonshine.NINA.TwoPointPolarAlignment.TwoPointPolarAlignmentSequenceItem RunningSequenceItem {
+            get => runningSequenceItem;
+            set {
+                runningSequenceItem = value;
+                RaisePropertyChanged(nameof(RunningSequenceItem));
+                RaisePropertyChanged(nameof(IsRunningFromSequence));
+                RaisePropertyChanged(nameof(CanEditSettings));
+                RaisePropertyChanged(nameof(ExposureTime));
+                RaisePropertyChanged(nameof(Gain));
+                RaisePropertyChanged(nameof(Filter));
+                RaisePropertyChanged(nameof(RotationAmount));
+            }
+        }
+
+        public bool IsRunningFromSequence => RunningSequenceItem != null;
+
+        public bool CanEditSettings => !IsRunning && !IsRunningFromSequence;
+
+        private ICommand resumeSequenceCommand;
+        public ICommand ResumeSequenceCommand => resumeSequenceCommand ??= new RelayCommand(o => {
+            ResumeSequence();
+        });
+
+        public void ResumeSequence() {
+            if (IsRunningFromSequence && RunningSequenceItem != null) {
+                Log("[Sequence] Operator requested sequence resume. Advancing sequence...");
+                RunningSequenceItem.Resume();
+            }
         }
 
         public double RotationAmount {
@@ -943,6 +979,122 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             await controller.ExecuteWorkflowAsync(context, cts.Token, progress, thumbnail => {
                 System.Windows.Application.Current.Dispatcher.Invoke(() => { LastFrame = thumbnail; });
             });
+        }
+
+        public async Task RunFromSequenceAsync(NirZonshine.NINA.TwoPointPolarAlignment.TwoPointPolarAlignmentSequenceItem sequenceItem, TaskCompletionSource<bool> resumeTcs, CancellationToken token) {
+            if (Interlocked.CompareExchange(ref _taskExecutingFlag, 1, 0) != 0) {
+                throw new InvalidOperationException("Another alignment or homing operation is already in progress.");
+            }
+
+            IsReversedFlowActive = false;
+            IsPreviousAlignmentDimmed = true;
+            IsRunning = true;
+            RunningSequenceItem = sequenceItem;
+            RaisePropertyChanged(nameof(CanStart));
+            RaisePropertyChanged(nameof(CanEditSettings));
+
+            var progress = new Progress<AlignmentProgressReport>(report => {
+                if (report.LogMessage != null) Log(report.LogMessage);
+                if (report.IsReversedFlowActive.HasValue) IsReversedFlowActive = report.IsReversedFlowActive.Value;
+                if (report.IsBlindSolvingActive.HasValue) IsBlindSolvingActive = report.IsBlindSolvingActive.Value;
+                if (report.StatusText != null && report.StatusColorHex != null) {
+                    SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
+                }
+                if (report.AltitudeError != null) {
+                    AltitudeError = report.AltitudeError;
+                    IsPreviousAlignmentDimmed = false;
+                }
+                if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
+                if (report.TotalError != null) TotalError = report.TotalError;
+                if (report.TotalErrorValue > 0) TotalErrorValue = report.TotalErrorValue;
+                if (report.AltitudeInstruction != null) AltitudeInstruction = report.AltitudeInstruction;
+                if (report.AzimuthInstruction != null) AzimuthInstruction = report.AzimuthInstruction;
+                IsAltitudePriority = report.IsAltitudePriority;
+                IsAzimuthPriority = report.IsAzimuthPriority;
+                if (report.TotalErrorRating != null) TotalErrorRating = report.TotalErrorRating;
+                if (report.TotalErrorRatingColorHex != null) TotalErrorRatingColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
+                if (report.TotalErrorValue > 0 && report.TotalErrorRatingColorHex != null) {
+                    TotalErrorColor = CreateFrozenBrush(report.TotalErrorRatingColorHex);
+                }
+            });
+
+            try {
+                var controller = new NirZonshine.NINA.TwoPointPolarAlignment.Workflow.AlignmentWorkflowController(
+                    _profileService, cameraMediator, telescopeMediator, plateSolverFactory, imagingMediator, filterWheelMediator, _polarSolver, _settingsManager
+                );
+                
+                controller.OnManualRotationRequested = async (context, targetDegrees, direction, initialCoords, sequence, captureSolver, isSimulation) => {
+                    await System.Windows.Application.Current.Dispatcher.Invoke(async () => {
+                        var vm = new NirZonshine.NINA.TwoPointPolarAlignment.ViewModels.ManualRotationVM {
+                            TargetDegrees = targetDegrees,
+                            InstructionText = $"Rotate the mount {direction} to the target angle. Tighten clutches, then click Finish.",
+                            IsSimulation = isSimulation
+                        };
+                        
+                        var dialog = new NirZonshine.NINA.TwoPointPolarAlignment.Views.ManualRotationWindow {
+                            DataContext = vm,
+                            Owner = System.Windows.Application.Current.MainWindow
+                        };
+                        
+                        var dialogCts = new System.Threading.CancellationTokenSource();
+                        try {
+                            vm.FinishRequested += (s, e) => dialog.DialogResult = true;
+                            dialog.Closed += (s, e) => dialogCts.Cancel();
+                        
+                            vm.SimOffsetRequested += (s, offset) => { context.CurrentSimulationOffset = offset; };
+                            vm.SimResetRequested += (s, e) => { context.CurrentSimulationOffset = 0.0; };
+                        
+                            var manualProgress = new Progress<NirZonshine.NINA.TwoPointPolarAlignment.Domain.ManualTrackingProgress>(p => {
+                                if (p.StatusText != null) vm.StatusText = p.StatusText;
+                                if (p.Thumbnail != null) LastFrame = p.Thumbnail;
+                                if (p.TargetDegrees > 0) {
+                                    vm.CurrentDegrees = p.CurrentDegrees;
+                                    vm.IsLocked = p.IsLocked;
+                                }
+                            });
+      
+                            var trackingTask = controller.ExecuteManualTrackingAsync(context, targetDegrees, direction, initialCoords, sequence, captureSolver, manualProgress, dialogCts.Token);
+                        
+                            dialog.ShowDialog();
+                            dialogCts.Cancel();
+                            try { await trackingTask; } catch { }
+                        } finally {
+                            dialogCts.Dispose();
+                        }
+                    });
+                };
+
+                controller.OnInterventionRequested = async (args) => {
+                    return ShowNinaStyledMessageBox(args.Title, args.Message, args.IsYesNo);
+                };
+
+                var context = new AlignmentWorkflowContext {
+                    ActiveDirection = Direction,
+                    ActivePreRotate = Method == RotationMethod.Automatic && StartingPoint == StartingPointMode.PreRotateHalfRange,
+                    LastStoppedCoordinates = null,
+                    LastStoppedDirection = null,
+                    IsRunningFromSequence = true,
+                    SequenceResumeTcs = resumeTcs
+                };
+
+                await controller.ExecuteWorkflowAsync(context, token, progress, thumbnail => {
+                    System.Windows.Application.Current.Dispatcher.Invoke(() => { LastFrame = thumbnail; });
+                });
+
+                Log("[Sequence] Sequence item alignment workflow completed successfully.");
+            } catch (OperationCanceledException) {
+                Log("[Sequence] Sequence item execution canceled.");
+                throw;
+            } catch (Exception ex) {
+                Log($"[Sequence] Sequence item execution failed: {ex.Message}");
+                throw;
+            } finally {
+                IsRunning = false;
+                RunningSequenceItem = null;
+                Interlocked.Exchange(ref _taskExecutingFlag, 0);
+                RaisePropertyChanged(nameof(CanStart));
+                RaisePropertyChanged(nameof(CanEditSettings));
+            }
         }
         public IEnumerable<string> Filters {
             get {

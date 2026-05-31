@@ -1,5 +1,16 @@
 # 2-Point Polar Alignment — Changelog
 
+## v1.2.1.0 — Advanced Sequencer Integration (2026-05-31)
+
+### ⚙️ Automation & Sequencer
+- **Automated Sequencer Item Integration**: Added a native `TwoPointPolarAlignmentSequenceItem` allowing operators to launch the polar alignment cycle automatically from N.I.N.A.'s Advanced Sequencer.
+- **Dynamic Configuration Inheritance & Lockout**: Sequencer parameters are automatically injected as overrides inside the plugin's `SettingsManager` and the main Dockable UI's fields are locked (`CanEditSettings = false`) during runs to prevent operational conflicts.
+- **Contextual Resume Manual Gatekeeper**: The cycle pauses in Phase F live adjustments, showing a purple **[Resume Sequence]** button that holds the sequencer until the user manually confirms final adjustments.
+- **In-Plugin Restart/Stop Agility**: Allows the operator to stop, start, or home the mount manually as many times as they'd like inside the plugin without aborting the sequence instruction, maintaining maximum flexibility under the stars.
+
+### 📋 Meta
+- Assembly version updated to `1.2.1.0`.
+
 ## v1.2.0.3 — Multi-Frame Sampling & Outlier Rejection (2026-05-31)
 
 ### ✨ Core Math & Robustness

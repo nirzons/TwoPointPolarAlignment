@@ -36,6 +36,90 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
         private double _polarHomeRA = 0.0;
         private double _polarHomeDec = 90.0;
 
+        // Override values for sequence mode
+        private double? _overrideExposureTime;
+        private int? _overrideGain;
+        private double? _overrideRotationAmount;
+        private string _overrideFilter;
+        private RotationMethod? _overrideMethod;
+        private RotationDirection? _overrideDirection;
+        private StartingPointMode? _overrideStartingPoint;
+        private string _overrideBinning;
+        private int? _overrideOffset;
+        private int? _overridePlateSolveRetries;
+        private bool? _overrideEnableOnePointAlignment;
+        private ExposuresPerPoint? _overrideExposuresPerPoint;
+
+        public void SetOverrides(
+            double? exposureTime,
+            int? gain,
+            double? rotationAmount,
+            string filter,
+            RotationMethod? method,
+            RotationDirection? direction,
+            StartingPointMode? startingPoint,
+            string binning,
+            int? offset,
+            int? plateSolveRetries,
+            bool? enableOnePointAlignment,
+            ExposuresPerPoint? exposuresPerPoint)
+        {
+            _overrideExposureTime = exposureTime;
+            _overrideGain = gain;
+            _overrideRotationAmount = rotationAmount;
+            _overrideFilter = filter;
+            _overrideMethod = method;
+            _overrideDirection = direction;
+            _overrideStartingPoint = startingPoint;
+            _overrideBinning = binning;
+            _overrideOffset = offset;
+            _overridePlateSolveRetries = plateSolveRetries;
+            _overrideEnableOnePointAlignment = enableOnePointAlignment;
+            _overrideExposuresPerPoint = exposuresPerPoint;
+
+            OnPropertyChanged(nameof(ExposureTime));
+            OnPropertyChanged(nameof(Gain));
+            OnPropertyChanged(nameof(RotationAmount));
+            OnPropertyChanged(nameof(Filter));
+            OnPropertyChanged(nameof(Method));
+            OnPropertyChanged(nameof(Direction));
+            OnPropertyChanged(nameof(StartingPoint));
+            OnPropertyChanged(nameof(Binning));
+            OnPropertyChanged(nameof(Offset));
+            OnPropertyChanged(nameof(PlateSolveRetries));
+            OnPropertyChanged(nameof(EnableOnePointAlignment));
+            OnPropertyChanged(nameof(ExposuresPerPoint));
+        }
+
+        public void ClearOverrides()
+        {
+            _overrideExposureTime = null;
+            _overrideGain = null;
+            _overrideRotationAmount = null;
+            _overrideFilter = null;
+            _overrideMethod = null;
+            _overrideDirection = null;
+            _overrideStartingPoint = null;
+            _overrideBinning = null;
+            _overrideOffset = null;
+            _overridePlateSolveRetries = null;
+            _overrideEnableOnePointAlignment = null;
+            _overrideExposuresPerPoint = null;
+
+            OnPropertyChanged(nameof(ExposureTime));
+            OnPropertyChanged(nameof(Gain));
+            OnPropertyChanged(nameof(RotationAmount));
+            OnPropertyChanged(nameof(Filter));
+            OnPropertyChanged(nameof(Method));
+            OnPropertyChanged(nameof(Direction));
+            OnPropertyChanged(nameof(StartingPoint));
+            OnPropertyChanged(nameof(Binning));
+            OnPropertyChanged(nameof(Offset));
+            OnPropertyChanged(nameof(PlateSolveRetries));
+            OnPropertyChanged(nameof(EnableOnePointAlignment));
+            OnPropertyChanged(nameof(ExposuresPerPoint));
+        }
+
         public SettingsManager(IProfileService profileService)
         {
             _profileService = profileService;
@@ -55,67 +139,67 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
 
         public double ExposureTime
         {
-            get => _exposureTime;
+            get => _overrideExposureTime ?? _exposureTime;
             set { if (_exposureTime != value) { _exposureTime = value; SaveSetting(nameof(ExposureTime), value); OnPropertyChanged(); } }
         }
 
         public int Gain
         {
-            get => _gain;
+            get => _overrideGain ?? _gain;
             set { if (_gain != value) { _gain = value; SaveSetting(nameof(Gain), value); OnPropertyChanged(); } }
         }
 
         public double RotationAmount
         {
-            get => _rotationAmount;
+            get => _overrideRotationAmount ?? _rotationAmount;
             set { if (_rotationAmount != value) { _rotationAmount = value; SaveSetting(nameof(RotationAmount), value); OnPropertyChanged(); } }
         }
 
         public RotationMethod Method
         {
-            get => _method;
+            get => _overrideMethod ?? _method;
             set { if (_method != value) { _method = value; SaveSetting(nameof(Method), (int)value); OnPropertyChanged(); } }
         }
 
         public RotationDirection Direction
         {
-            get => _direction;
+            get => _overrideDirection ?? _direction;
             set { if (_direction != value) { _direction = value; SaveSetting(nameof(Direction), (int)value); OnPropertyChanged(); } }
         }
 
         public StartingPointMode StartingPoint
         {
-            get => _startingPoint;
+            get => _overrideStartingPoint ?? _startingPoint;
             set { if (_startingPoint != value) { _startingPoint = value; SaveSetting(nameof(StartingPoint), (int)value); OnPropertyChanged(); } }
         }
 
         public string Filter
         {
-            get => _filter;
+            get => _overrideFilter ?? _filter;
             set { if (_filter != value) { _filter = value; SaveSetting(nameof(Filter), value); OnPropertyChanged(); } }
         }
 
         public string Binning
         {
-            get => _binning;
+            get => _overrideBinning ?? _binning;
             set { if (_binning != value) { _binning = value; SaveSetting(nameof(Binning), value); OnPropertyChanged(); } }
         }
 
         public int Offset
         {
-            get => _offset;
+            get => _overrideOffset ?? _offset;
             set { if (_offset != value) { _offset = value; SaveSetting(nameof(Offset), value); OnPropertyChanged(); } }
         }
 
         public int PlateSolveRetries
         {
-            get => _plateSolveRetries;
+            get => _overridePlateSolveRetries ?? _plateSolveRetries;
             set { if (_plateSolveRetries != value) { _plateSolveRetries = value; SaveSetting(nameof(PlateSolveRetries), value); OnPropertyChanged(); } }
         }
 
         public bool EnableOnePointAlignment
         {
-            get => _enableOnePointAlignment;
+            get => _overrideEnableOnePointAlignment ?? _enableOnePointAlignment;
             set { if (_enableOnePointAlignment != value) { _enableOnePointAlignment = value; SaveSetting(nameof(EnableOnePointAlignment), value); OnPropertyChanged(); } }
         }
 
@@ -133,7 +217,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
 
         public ExposuresPerPoint ExposuresPerPoint
         {
-            get => _exposuresPerPoint;
+            get => _overrideExposuresPerPoint ?? _exposuresPerPoint;
             set { if (_exposuresPerPoint != value) { _exposuresPerPoint = value; SaveSetting(nameof(ExposuresPerPoint), (int)value); OnPropertyChanged(); } }
         }
 

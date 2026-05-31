@@ -5,11 +5,11 @@
     <RootNamespace>NirZonshine.NINA.TwoPointPolarAlignment</RootNamespace>
     <AssemblyName>NirZonshine.NINA.TwoPointPolarAlignment</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <Version>1.2.0.3</Version>
+    <Version>1.2.1.0</Version>
     <UseWPF>true</UseWPF>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-
+    <DefaultItemExcludes>$(DefaultItemExcludes);nina.plugin.polaralignment-master\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

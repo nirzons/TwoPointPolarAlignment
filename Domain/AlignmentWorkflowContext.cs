@@ -23,5 +23,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Domain {
         
         public Coordinates LastStoppedCoordinates { get; set; }
         public RotationDirection? LastStoppedDirection { get; set; }
+        
+        public bool IsRunningFromSequence { get; set; }
+        public System.Threading.Tasks.TaskCompletionSource<bool> SequenceResumeTcs { get; set; }
     }
 }

@@ -661,39 +661,78 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
 
-            while (!token.IsCancellationRequested) {
-                if (context.IsSimulation) {
-                    await Task.Delay(2000, token);
-                    var simPos = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
-                    double baseRA = context.Coordinates2?.RA ?? simPos.RA;
-                    double baseDec = context.Coordinates2?.Dec ?? simPos.Dec;
-                    var c2 = new Coordinates(baseRA + (new Random().NextDouble() - 0.5) * 0.015, baseDec + (new Random().NextDouble() - 0.5) * 0.015, Epoch.JNOW, Coordinates.RAType.Hours);
-                    
-                    var err = _polarSolver.EvaluateLiveError(c2, context.LstMeasurement2, calibration, latitude);
-                    ReportAlignmentProgress(progress, err.CalculatedPolarAxis, c2.RA, latitude, context.LstMeasurement2);
-                } else {
-                    var liveHintCoords = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2;
-                    CaptureSolverParameter solverParam = new CaptureSolverParameter {
-                        Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(2), FocalLength = profile.TelescopeSettings.FocalLength,
-                        PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0, Binning = binVal, SearchRadius = 15.0, Regions = 5000.0,
-                        MaxObjects = 500, Coordinates = liveHintCoords, BlindFailoverEnabled = (_settingsManager.Method == RotationMethod.Manual),
-                        DisableNotifications = true
-                    };
+            try {
+                while (!token.IsCancellationRequested) {
+                    if (context.IsRunningFromSequence && context.SequenceResumeTcs != null && context.SequenceResumeTcs.Task.IsCompleted) {
+                        ReportLog(progress, "[Sequence] Resume Sequence requested. Exiting Phase F live adjustment loop successfully.");
+                        break;
+                    }
 
-                    var solveProgress = new Progress<PlateSolveProgress>(p => { if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail); });
-                    try {
-                        var liveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, solveProgress, new Progress<ApplicationStatus>(), token), token, "Live Solve Capture");
-                        if (liveResult != null && liveResult.Success) {
-                            ReportStatus(progress, "Solved", "#22C55E");
-                            double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
-                            var err = _polarSolver.EvaluateLiveError(liveResult.Coordinates, lstLive, calibration, latitude);
-                            ReportAlignmentProgress(progress, err.CalculatedPolarAxis, liveResult.Coordinates.RA, latitude, lstLive);
-                        } else {
-                            ReportStatus(progress, "Could not solve", "#EF4444");
+                    using (var cts = CancellationTokenSource.CreateLinkedTokenSource(token)) {
+                        if (context.IsRunningFromSequence && context.SequenceResumeTcs != null) {
+                            var tcs = context.SequenceResumeTcs;
+                            // Trigger cancellation of the current loop step when tcs completes
+                            _ = tcs.Task.ContinueWith(_ => {
+                                try { cts.Cancel(); } catch { }
+                            });
                         }
-                    } catch { }
+
+                        try {
+                            if (cts.Token.IsCancellationRequested) {
+                                if (context.IsRunningFromSequence && context.SequenceResumeTcs != null && context.SequenceResumeTcs.Task.IsCompleted) {
+                                    ReportLog(progress, "[Sequence] Resume Sequence requested. Exiting Phase F live adjustment loop successfully.");
+                                    break;
+                                }
+                                break;
+                            }
+
+                            if (context.IsSimulation) {
+                                await Task.Delay(2000, cts.Token);
+                                var simPos = _telescopeMediator.GetCurrentPosition() ?? new Coordinates(12.0, 45.0, Epoch.JNOW, Coordinates.RAType.Hours);
+                                double baseRA = context.Coordinates2?.RA ?? simPos.RA;
+                                double baseDec = context.Coordinates2?.Dec ?? simPos.Dec;
+                                var c2 = new Coordinates(baseRA + (new Random().NextDouble() - 0.5) * 0.015, baseDec + (new Random().NextDouble() - 0.5) * 0.015, Epoch.JNOW, Coordinates.RAType.Hours);
+                                
+                                var err = _polarSolver.EvaluateLiveError(c2, context.LstMeasurement2, calibration, latitude);
+                                ReportAlignmentProgress(progress, err.CalculatedPolarAxis, c2.RA, latitude, context.LstMeasurement2);
+                            } else {
+                                var liveHintCoords = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2;
+                                CaptureSolverParameter solverParam = new CaptureSolverParameter {
+                                    Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(2), FocalLength = profile.TelescopeSettings.FocalLength,
+                                    PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0, Binning = binVal, SearchRadius = 15.0, Regions = 5000.0,
+                                    MaxObjects = 500, Coordinates = liveHintCoords, BlindFailoverEnabled = (_settingsManager.Method == RotationMethod.Manual),
+                                    DisableNotifications = true
+                                };
+
+                                var solveProgress = new Progress<PlateSolveProgress>(p => { if (p.Thumbnail != null) updateThumbnail?.Invoke(p.Thumbnail); });
+                                try {
+                                    var liveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, solveProgress, new Progress<ApplicationStatus>(), cts.Token), cts.Token, "Live Solve Capture");
+                                    if (liveResult != null && liveResult.Success) {
+                                        ReportStatus(progress, "Solved", "#22C55E");
+                                        double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
+                                        var err = _polarSolver.EvaluateLiveError(liveResult.Coordinates, lstLive, calibration, latitude);
+                                        ReportAlignmentProgress(progress, err.CalculatedPolarAxis, liveResult.Coordinates.RA, latitude, lstLive);
+                                    } else {
+                                        ReportStatus(progress, "Could not solve", "#EF4444");
+                                    }
+                                } catch (Exception ex) when (!(ex is OperationCanceledException)) { }
+                            }
+                        } catch (OperationCanceledException) {
+                            if (context.IsRunningFromSequence && context.SequenceResumeTcs != null && context.SequenceResumeTcs.Task.IsCompleted) {
+                                ReportLog(progress, "[Sequence] Resume Sequence requested. Exiting Phase F live adjustment loop successfully.");
+                                break;
+                            }
+                            throw;
+                        }
+                    }
+                    await Task.Delay(100, token);
                 }
-                await Task.Delay(100, token);
+            } catch (OperationCanceledException) {
+                if (context.IsRunningFromSequence && context.SequenceResumeTcs != null && context.SequenceResumeTcs.Task.IsCompleted) {
+                    ReportLog(progress, "[Sequence] Resume Sequence requested. Exiting Phase F live adjustment loop successfully.");
+                } else {
+                    throw;
+                }
             }
         }
 
