@@ -74,7 +74,7 @@ jobs:
             }
             "Installer" = @{
                 "URL" = "https://github.com/nirzons/TwoPointPolarAlignment/releases/download/${{ github.ref_name }}/${{ env.ZIP_NAME }}"
-                "Type" = "ZIP"
+                "Type" = "ARCHIVE"
                 "Checksum" = $checksum
                 "ChecksumType" = "SHA256"
             }
@@ -96,7 +96,6 @@ jobs:
       with:
         files: |
           bin/Release/net8.0-windows/${{ env.ZIP_NAME }}
-          build_artifacts/manifest.json
         name: Release ${{ github.ref_name }}
         draft: false
         prerelease: false
