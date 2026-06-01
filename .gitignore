@@ -10,7 +10,6 @@ NINA/External/*/Nikon
 *.rsuser
 *.user
 *.suo
-*.user
 *.userosscache
 *.sln.docstates
 
@@ -102,3 +101,18 @@ Accord.dll.config
 implementation_plan.md
 scratch/
 scratch-app/
+
+# Developer plans, roadmaps, and local workflow documentation
+README.7z
+README.pdf
+beta_issue_tracker_and_roadmap.md
+feature_multi_frame_sampling.md
+future_feature_star_tracking_overlay.md
+gui_improvement_plan.md
+how_to_publish_new_version.md
+nina_plugin_store_submission.md
+refactor_and_modularization_plan.md
+reflect_sequencer.txt
+rough_finder_plan.md
+session_handover_brief.md
+submission_package/
