@@ -1,5 +1,5 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: v1.2.1.0*
+*Applicable Version: v1.3.0.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
@@ -66,7 +66,7 @@ Before starting, adjust these core parameters in the plugin interface:
 
 ## ⚙️ Advanced Sequencer Integration
 
-Version `1.2.1.0` introduces native integration with N.I.N.A.'s **Advanced Sequencer**, allowing you to automate your polar alignment cycle as part of your nightly sequence!
+Version `1.3.0.0` introduces native integration with N.I.N.A.'s **Advanced Sequencer**, allowing you to automate your polar alignment cycle as part of your nightly sequence!
 
 ### 1. Adding the Instruction
 1. Open N.I.N.A.'s **Advanced Sequencer** panel.

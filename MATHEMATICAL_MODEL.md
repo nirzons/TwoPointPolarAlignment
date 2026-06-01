@@ -45,6 +45,28 @@ $$
 
 This ensures that the spatial transformation between Point 1 and Point 2 represents purely the mechanical rotation of the mount around its physical polar axis, completely decoupled from Earth's rotation.
 
+### 2.1 Coordinate Frame Epoch Precession Correction (J2000 to JNOW)
+
+A critical requirement in precise astrometric polar calculations is maintaining coordinate frame epoch consistency. N.I.N.A.'s plate solvers solve against static star catalogs and return equatorial coordinates $(\alpha_{solver}, \delta_{solver})$ mapped to the **J2000.0** epoch. However, Local Sidereal Time ($LST$) and the physical mount's orientation are defined in the real-time **JNOW** epoch.
+
+Because of the Earth's axial precession, the true celestial pole drifts by approximately $20.04''$ per year. Over the years elapsed since the year 2000 ($t_{current} - 2000$), this celestial precession drifts the physical rotation pole by:
+
+$$
+\Delta_{precession} \approx 20.04'' \times (t_{current} - 2000)
+$$
+
+By 2026, this accumulated drift reaches approximately **$8.5$ to $8.8$ arcminutes**. 
+
+If the 3D solver processes the raw J2000.0 solver coordinates directly, the calculated mechanical rotation axis will be expressed in J2000.0 coordinates. When this axis is compared against JNOW coordinates (which define the physical rotation axis today), the $8.5$-arcminute celestial drift manifests as a systematic, phantom polar alignment error of the exact same magnitude—even if the mount is physically perfectly aligned to the true sky.
+
+To eliminate this systematic offset, the algorithm intercepts all incoming solver coordinates and precesses them from J2000 to the current JNOW epoch using N.I.N.A.'s native high-precision precession transforms:
+
+$$
+(\alpha_{JNOW}, \delta_{JNOW}) = \text{Precess}\Big((\alpha_{solver}, \delta_{solver}),\ \text{J2000} \rightarrow \text{JNOW}\Big)
+$$
+
+This ensures that the entire mathematical pipeline resides exclusively in a JNOW reference frame, bringing 2PPA into perfect alignment harmony with PHD2 and native solvers.
+
 ## 3. Derivation of the Mechanical Polar Axis
 
 Let $\mathbf{v}\_1$ and $\mathbf{v}\_2$ be the 3D unit vectors of the normalized Point 1 and Point 2, respectively. The plate solver also provides the Position Angle ($PA$) for both points, representing the camera sensor's rotation relative to celestial North.

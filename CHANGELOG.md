@@ -4,6 +4,13 @@ All notable changes to this project are documented below. Only officially releas
 
 ---
 
+## v1.3.0.0 — Epoch Precession Correction (J2000 to JNOW) (2026-06-01)
+
+### ✨ Core Math Accuracy
+- **Coordinate Precession (J2000 to JNOW)**: Fixed a systematic ~8.5-arcminute polar alignment error offset reported by the community. Incoming plate solver coordinates (which are J2000.0) are now precessed natively to JNOW before running the mathematical solver, bringing 2PPA into perfect alignment calculations matching PHD2 guiding logs and other native solvers.
+
+---
+
 ## v1.2.1.0 — Advanced Sequencer Automation & Multi-Frame Sampling (2026-05-31)
 
 This major release delivers full automation via N.I.N.A.'s Advanced Sequencer, robust multi-frame averaging, and visual adaptations for single-knob base mounts.
