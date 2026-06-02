@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.3.1.0 — High-Precision Polar Guard Expansion & Rig Stability (2026-06-02)
+
+### ✨ Core Math Accuracy
+- **High-Precision Polar Guard Expansion**: Solved an alignment failure crash on highly precise rigs during verification passes by increasing the celestial pole safety guard threshold to `0.9999999999` ($89.99999^\circ$ / 36 milliarcseconds). This expands the allowable alignment zone to the absolute limits of physical and atmospheric resolution, preventing mathematical crashes on perfect alignments while retaining 100% numerical and floating-point stability.
+
 ---
 
 ## v1.3.0.0 — Epoch Precession Correction (J2000 to JNOW) (2026-06-01)

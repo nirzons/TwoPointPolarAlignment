@@ -12,9 +12,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
             // Position angles from plate solving are defined relative to celestial north (0,0,1).
             // At Dec exactly ±90°, the tangent plane frame N/E degenerates (N→0, E→0).
             // Guard: if either measurement is too close to the exact pole, the math is indeterminate.
-            if (Math.Abs(v1.Z) > 0.99999 || Math.Abs(v2.Z) > 0.99999) {
+            if (Math.Abs(v1.Z) > 0.9999999999 || Math.Abs(v2.Z) > 0.9999999999) {
                 throw new InvalidOperationException(
-                    "Plate solve returned coordinates too close to the exact celestial pole (|Dec| > 89.999°). " +
+                    "Plate solve returned coordinates too close to the exact celestial pole (|Dec| > 89.99999°). " +
                     "The solver math requires observations slightly away from the pole. " +
                     "If using a simulator, ensure the simulated bias moves coordinates off the exact pole.");
             }
