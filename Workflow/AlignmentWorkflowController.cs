@@ -646,7 +646,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             // 3. Calibrate using normalized Point 1 coordinate
             var calibration = _polarSolver.Calibrate(correctedC1, context.Angle1, context.Coordinates2, context.Angle2, context.LstMeasurement2, latitude);
             
-            ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2);
+            ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2, context.Coordinates2.Epoch);
             progress.Report(new AlignmentProgressReport { HasSuccessfulAlignmentReached = true });
 
             int binVal = 1;
@@ -695,7 +695,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                 var c2 = new Coordinates(baseRA + (new Random().NextDouble() - 0.5) * 0.015, baseDec + (new Random().NextDouble() - 0.5) * 0.015, Epoch.JNOW, Coordinates.RAType.Hours);
                                 
                                 var err = _polarSolver.EvaluateLiveError(c2, context.LstMeasurement2, calibration, latitude);
-                                ReportAlignmentProgress(progress, err.CalculatedPolarAxis, c2.RA, latitude, context.LstMeasurement2);
+                                ReportAlignmentProgress(progress, err);
                             } else {
                                 var liveHintCoords = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2;
                                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
@@ -713,7 +713,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                         ReportStatus(progress, "Solved", "#22C55E");
                                         double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
                                         var err = _polarSolver.EvaluateLiveError(liveResult.Coordinates, lstLive, calibration, latitude);
-                                        ReportAlignmentProgress(progress, err.CalculatedPolarAxis, liveResult.Coordinates.RA, latitude, lstLive);
+                                        ReportAlignmentProgress(progress, err);
                                     } else {
                                         ReportStatus(progress, "Could not solve", "#EF4444");
                                     }
@@ -738,11 +738,15 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             }
         }
 
-        private void ReportAlignmentProgress(IProgress<AlignmentProgressReport> progress, Vector3D calculatedPolarAxis, double referenceRA, double latitude, double lst) {
-            var error = _polarSolver.CalculateErrorFromAxis(calculatedPolarAxis, referenceRA, lst, latitude, Epoch.J2000);
+        private void ReportAlignmentProgress(IProgress<AlignmentProgressReport> progress, Vector3D calculatedPolarAxis, double referenceRA, double latitude, double lst, Epoch sourceEpoch = Epoch.J2000) {
+            var error = _polarSolver.CalculateErrorFromAxis(calculatedPolarAxis, referenceRA, lst, latitude, sourceEpoch);
+            ReportAlignmentProgress(progress, error);
+        }
+
+        private void ReportAlignmentProgress(IProgress<AlignmentProgressReport> progress, AlignmentError error) {
             double altErr = error.AltitudeErrorArcmin;
             double azErr = error.AzimuthErrorArcmin;
-            double total = Math.Sqrt(altErr * altErr + azErr * azErr);
+            double total = error.TotalErrorArcmin;
 
             var report = new AlignmentProgressReport {
                 AltitudeError = FormatError(altErr),
@@ -1032,7 +1036,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     if (lat >= 0 && mockAxis.Z < 0) mockAxis = new Vector3D(-mockAxis.X, -mockAxis.Y, -mockAxis.Z);
                     else if (lat < 0 && mockAxis.Z > 0) mockAxis = new Vector3D(-mockAxis.X, -mockAxis.Y, -mockAxis.Z);
 
-                    ReportAlignmentProgress(progress, mockAxis, currentCoords.RA, lat, currentCoords.RA);
+                    ReportAlignmentProgress(progress, mockAxis, currentCoords.RA, lat, currentCoords.RA, currentCoords.Epoch);
 
                     if (distToPole < 5.0) {
                         ReportLog(progress, "★ TARGET ZONE ACQUIRED! Rescued into the < 5.0° radius region.");

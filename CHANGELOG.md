@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.4.1.0 — Live Solve Double-Precession Fix (2026-06-04)
+
+### ✨ Core Math Accuracy
+- **Fixed Live Loop Double-Precession**: Corrected a bug where the JNOW-precessed polar axis returned by `EvaluateLiveError` was precessed a second time inside `ReportAlignmentProgress`, shifting the user's live alignment target by ~8.5 arcminutes. Smart restarts now show stable, consistent Alt/Az coordinates matching the end of the previous run with zero coordinate jump.
+
+---
+
 ## v1.4.0.0 — J2000/JNOW Epoch Pipeline Fix — Systematic 9-Arcminute Error Resolved (2026-06-04)
 
 ### 🔬 Critical Math Accuracy Fix (Issue #3)
