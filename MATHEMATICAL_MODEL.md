@@ -45,27 +45,31 @@ $$
 
 This ensures that the spatial transformation between Point 1 and Point 2 represents purely the mechanical rotation of the mount around its physical polar axis, completely decoupled from Earth's rotation.
 
-### 2.1 Coordinate Frame Epoch Precession Correction (J2000 to JNOW)
+### 2.1 Coordinate Frame Epoch Consistency (J2000 Native Pipeline with Late Axis Precession)
 
-A critical requirement in precise astrometric polar calculations is maintaining coordinate frame epoch consistency. N.I.N.A.'s plate solvers solve against static star catalogs and return equatorial coordinates $(\alpha_{solver}, \delta_{solver})$ mapped to the **J2000.0** epoch. However, Local Sidereal Time ($LST$) and the physical mount's orientation are defined in the real-time **JNOW** epoch.
+A critical requirement in precise astrometric polar calculations is maintaining full epoch consistency between coordinates and Position Angles throughout the entire mathematical pipeline.
 
-Because of the Earth's axial precession, the true celestial pole drifts by approximately $20.04''$ per year. Over the years elapsed since the year 2000 ($t_{current} - 2000$), this celestial precession drifts the physical rotation pole by:
+N.I.N.A.'s plate solvers solve against static star catalogs and return two pieces of information:
+1. **Equatorial Coordinates** $(\alpha_{solver}, \delta_{solver})$ in the **J2000.0** epoch.
+2. **Camera Position Angle (PA)** relative to **J2000.0 Celestial North**.
+
+Both quantities are natively expressed in J2000.0. The critical insight is that these two quantities must remain in the **same epoch** when they are used together to derive the camera orientation vectors $\mathbf{X}_i$ and $\mathbf{Y}_i$ in Sections 3.1 and 3.2. If the coordinates are precessed to JNOW while the PA remains in J2000, the local tangent-plane basis $(\mathbf{N}_i, \mathbf{E}_i)$ is constructed at JNOW coordinates while the PA rotates within it using a J2000 angle — a frame mismatch.
+
+Because lines of Right Ascension converge near the celestial pole, the J2000.0-to-JNOW pole shift of approximately **8.5 to 8.8 arcminutes** (growing at $20.04''$/year) rotates the direction of Celestial North at the pole-field coordinates by up to **8 to 16 degrees**. Applying a J2000 Position Angle inside this JNOW tangent frame therefore points the camera orientation vectors in the wrong direction, injecting a systematic phantom polar alignment error of approximately the same magnitude as the pole shift — **~9 arcminutes** in 2026 — even when the mount is physically perfectly aligned.
+
+#### Solution: J2000 Pipeline with Late-Stage Axis Precession
+
+To restore full mathematical consistency, the algorithm is structured as follows:
+
+1. **Native J2000 Pipeline**: All solver coordinates and Position Angles are used exactly as returned — in J2000.0 — throughout the entire 3D pipeline: LST drift normalization, local frame construction, rotation matrix derivation, Rodrigues' rotation formula, and live error evaluation.
+
+2. **Late-Stage Axis Precession**: The computed mechanical polar axis unit vector $\mathbf{P}$ — which is expressed in J2000.0 — is precessed to the current JNOW epoch as the very last step, before converting to Alt/Az offsets:
 
 $$
-\Delta_{precession} \approx 20.04'' \times (t_{current} - 2000)
+(\alpha_{JNOW}, \delta_{JNOW}) = \text{Precess}\Big((\alpha_{P,\,J2000},\, \delta_{P,\,J2000}),\; \text{J2000} \rightarrow \text{JNOW}\Big)
 $$
 
-By 2026, this accumulated drift reaches approximately **$8.5$ to $8.8$ arcminutes**. 
-
-If the 3D solver processes the raw J2000.0 solver coordinates directly, the calculated mechanical rotation axis will be expressed in J2000.0 coordinates. When this axis is compared against JNOW coordinates (which define the physical rotation axis today), the $8.5$-arcminute celestial drift manifests as a systematic, phantom polar alignment error of the exact same magnitude—even if the mount is physically perfectly aligned to the true sky.
-
-To eliminate this systematic offset, the algorithm intercepts all incoming solver coordinates and precesses them from J2000 to the current JNOW epoch using N.I.N.A.'s native high-precision precession transforms:
-
-$$
-(\alpha_{JNOW}, \delta_{JNOW}) = \text{Precess}\Big((\alpha_{solver}, \delta_{solver}),\ \text{J2000} \rightarrow \text{JNOW}\Big)
-$$
-
-This ensures that the entire mathematical pipeline resides exclusively in a JNOW reference frame, bringing 2PPA into perfect alignment harmony with PHD2 and native solvers.
+This precessed representation of $\mathbf{P}$ is then compared against the JNOW celestial pole (whose physical altitude equals the site latitude $\phi$). Because both the computed axis and the true pole reference are now in JNOW, the comparison is epoch-consistent and the systematic offset is fully eliminated.
 
 ## 3. Derivation of the Mechanical Polar Axis
 

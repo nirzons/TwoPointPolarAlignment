@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.4.0.0 — J2000/JNOW Epoch Pipeline Fix — Systematic 9-Arcminute Error Resolved (2026-06-04)
+
+### 🔬 Critical Math Accuracy Fix (Issue #3)
+- **Root-Cause Fix for Systematic ~9-Arcminute Alignment Error**: Identified and corrected a coordinate/Position Angle epoch mismatch introduced in v1.3.0.0. The previous approach precessed solver *Coordinates* from J2000 to JNOW at the **input stage** while leaving the camera's *Position Angle (PA)* in its native J2000 frame. Because lines of RA converge near the celestial pole, the J2000→JNOW pole shift (~8.5–8.8 arcminutes) rotates the direction of Celestial North at the measured coordinates by up to 8–16 degrees, causing the PA-derived camera orientation vectors to point in the wrong direction and injecting a systematic phantom error of the same ~9-arcminute magnitude.
+- **New Approach — Precess Only the Final Axis Vector**: The entire 3D kinematics pipeline (LST normalization, rotation matrix derivation, Rodrigues' formula) now runs in the solver's native **J2000.0** frame, keeping coordinates and Position Angles perfectly consistent. Only at the very end — inside `CalculateErrorFromAxis` — is the computed mechanical polar axis precessed from J2000 to JNOW before projecting into Alt/Az offsets. This ensures the final pole comparison is made against the real-time physical JNOW pole with zero mismatch.
+
+---
+
 ## v1.3.1.0 — High-Precision Polar Guard Expansion & Rig Stability (2026-06-02)
 
 ### ✨ Core Math Accuracy

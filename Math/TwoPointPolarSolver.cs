@@ -83,7 +83,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
 
             if (sinTheta < 1e-12) {
                 // No rotation or 180° rotation — polar axis unchanged
-                return CalculateErrorFromAxis(P, liveCoordinates.RA, lstLive, siteLatitude);
+                return CalculateErrorFromAxis(P, liveCoordinates.RA, lstLive, siteLatitude, liveCoordinates.Epoch);
             }
 
             k = k.Normalize();
@@ -91,10 +91,21 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
             // Rodrigues' rotation formula: P_rot = P*cos(θ) + (k×P)*sin(θ) + k*(k·P)*(1-cos(θ))
             Vector3D calculatedPolarAxis = (cosTheta * P + sinTheta * Vector3D.Cross(k, P) + Vector3D.Dot(k, P) * (1.0 - cosTheta) * k).Normalize();
 
-            return CalculateErrorFromAxis(calculatedPolarAxis, liveCoordinates.RA, lstLive, siteLatitude);
+            return CalculateErrorFromAxis(calculatedPolarAxis, liveCoordinates.RA, lstLive, siteLatitude, liveCoordinates.Epoch);
         }
 
-        public AlignmentError CalculateErrorFromAxis(Vector3D axis, double referenceRA, double lstLive, double siteLatitude) {
+        public AlignmentError CalculateErrorFromAxis(Vector3D axis, double referenceRA, double lstLive, double siteLatitude, Epoch sourceEpoch = Epoch.J2000) {
+            // If the axis was computed from J2000 solver coordinates, precess to JNOW before Alt/Az projection
+            // so the computed pole is compared against the real-time physical pole, not the J2000 pole.
+            if (sourceEpoch == Epoch.J2000) {
+                double decJ2000 = System.Math.Asin(System.Math.Clamp(axis.Z, -1.0, 1.0)) * 180.0 / System.Math.PI;
+                double raJ2000  = System.Math.Atan2(axis.Y, axis.X) * 12.0 / System.Math.PI;
+                if (raJ2000 < 0) raJ2000 += 24.0;
+                var axisJ2000 = new Coordinates(raJ2000, decJ2000, Epoch.J2000, Coordinates.RAType.Hours);
+                var axisJNow  = axisJ2000.Transform(Epoch.JNOW);
+                axis = Vector3D.FromEquatorial(axisJNow);
+            }
+
             double decP = System.Math.Asin(System.Math.Clamp(axis.Z, -1.0, 1.0)) * 180.0 / System.Math.PI;
             double raP = System.Math.Atan2(axis.Y, axis.X) * 12.0 / System.Math.PI;
             if (raP < 0) raP += 24.0;

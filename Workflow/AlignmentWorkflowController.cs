@@ -445,14 +445,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         try {
                             var res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(sequence, solverParam, solveProgress, appStatusProg, token), token, "Solve Capture");
                             if (res != null && res.Success) {
-                                if (res.Coordinates.Epoch == Epoch.J2000) {
-                                    ReportLog(progress, "[Precession] Precessing solved coordinates from J2000 to JNOW...");
-                                    res = new PlateSolveResult {
-                                        Success = res.Success,
-                                        Coordinates = res.Coordinates.Transform(Epoch.JNOW),
-                                        PositionAngle = res.PositionAngle
-                                    };
-                                }
+                                ReportLog(progress, $"[Epoch] Solver returned coordinates in epoch: {res.Coordinates.Epoch}. Passing native J2000 coordinates to solver pipeline.");
                                 successfulSolves.Add(new SubframeSolveInfo {
                                     Result = res,
                                     Lst = _telescopeMediator.GetInfo()?.SiderealTime ?? res.Coordinates.RA
@@ -716,13 +709,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                 try {
                                     var liveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, solveProgress, new Progress<ApplicationStatus>(), cts.Token), cts.Token, "Live Solve Capture");
                                     if (liveResult != null && liveResult.Success) {
-                                        if (liveResult.Coordinates.Epoch == Epoch.J2000) {
-                                            liveResult = new PlateSolveResult {
-                                                Success = liveResult.Success,
-                                                Coordinates = liveResult.Coordinates.Transform(Epoch.JNOW),
-                                                PositionAngle = liveResult.PositionAngle
-                                            };
-                                        }
+                                        ReportLog(progress, $"[Epoch] Live solver returned epoch: {liveResult.Coordinates.Epoch}. Passing native J2000 coordinates to solver pipeline.");
                                         ReportStatus(progress, "Solved", "#22C55E");
                                         double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
                                         var err = _polarSolver.EvaluateLiveError(liveResult.Coordinates, lstLive, calibration, latitude);
@@ -752,7 +739,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
         }
 
         private void ReportAlignmentProgress(IProgress<AlignmentProgressReport> progress, Vector3D calculatedPolarAxis, double referenceRA, double latitude, double lst) {
-            var error = _polarSolver.CalculateErrorFromAxis(calculatedPolarAxis, referenceRA, lst, latitude);
+            var error = _polarSolver.CalculateErrorFromAxis(calculatedPolarAxis, referenceRA, lst, latitude, Epoch.J2000);
             double altErr = error.AltitudeErrorArcmin;
             double azErr = error.AzimuthErrorArcmin;
             double total = Math.Sqrt(altErr * altErr + azErr * azErr);
@@ -1029,13 +1016,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     
                     try {
                         res = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, prog, appStatusProg, rescueToken), rescueToken, "Solve Capture");
-                        if (res != null && res.Success && res.Coordinates.Epoch == Epoch.J2000) {
-                            res = new PlateSolveResult {
-                                Success = res.Success,
-                                Coordinates = res.Coordinates.Transform(Epoch.JNOW),
-                                PositionAngle = res.PositionAngle
-                            };
-                        }
+                        ReportLog(progress, $"[Epoch] Rescue solver returned epoch: {res?.Coordinates.Epoch}. Passing native J2000 coordinates to solver pipeline.");
                     } catch { } finally {
                         progress.Report(new AlignmentProgressReport { IsBlindSolvingActive = false });
                     }

@@ -1,5 +1,5 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: v1.3.1.0*
+*Applicable Version: v1.4.0.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
