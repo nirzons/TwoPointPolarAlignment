@@ -1,12 +1,13 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: v1.4.1.0*
+*Applicable Version: v1.4.2.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
 ---
 
-## 🛠️ Installation Guide (N.I.N.A. Plugin Store)
+## 🛠️ Installation Guide
 
+### 1. Recommended: N.I.N.A. Plugin Store (Automatic)
 The plugin is officially published in the centralized N.I.N.A. Plugin Store, making installation a simple, one-click process:
 
 1. **Launch N.I.N.A.**: Ensure your imaging PC is connected to the internet.
@@ -16,6 +17,20 @@ The plugin is officially published in the centralized N.I.N.A. Plugin Store, mak
 5. **Install**: Click the **Install** button. N.I.N.A. will automatically download and unpack the correct plugin package.
 6. **Restart N.I.N.A.**: Close and restart N.I.N.A. to activate the plugin. 
 7. **Verify**: Open N.I.N.A. and confirm that **2-Point Polar Alignment** appears active under your **Plugins** -> **Installed** list. You can now add it as a dockable tab to your **Imaging** layout!
+
+### 2. Manual Installation (For Development & Offline PCs)
+If you need to install the plugin manually (e.g., from a custom compiled release or on an offline computer):
+
+1. **Download / Build**: Obtain the plugin ZIP archive containing the compiled binaries, or build the project from source.
+2. **Locate plugins directory**: Navigate to your local AppData directory: `%LOCALAPPDATA%\NINA\Plugins\3.0.0\` (typically `C:\Users\<YourUsername>\AppData\Local\NINA\Plugins\3.0.0\`).
+3. **Create folder**: Create a new subfolder named precisely **`2-Point Polar Alignment`**.
+4. **Extract files**: Extract/copy the compiled binary files into that folder:
+   - `NirZonshine.NINA.TwoPointPolarAlignment.dll`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.pdb`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.deps.json`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.runtimeconfig.json`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.dll.config`
+5. **Restart & Verify**: Restart N.I.N.A. to load the plugin.
 
 ---
 
@@ -61,6 +76,12 @@ Before starting, adjust these core parameters in the plugin interface:
 | **Azimuth Knob Visual**| `Standard` | Map Azimuth instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols (perfect for single-knob AM5 mounts). |
 | **Override Mount Home**| `False` | Set to `True` to unlock custom celestial home position starting parameters (described in detail below). |
 | **Lock Polar Home** | Action Button | Press to save the mount's active RA/Dec coordinates persistently in your active profile. |
+
+---
+
+> [!NOTE]
+> **Filter Configuration & Profile Synchronization**:
+> The list of filters displayed in the dropdown is loaded from your active N.I.N.A. profile (configured in N.I.N.A. under Options -> Equipment -> Filter Wheel). If you edit, rename, or add filter names there, you **must restart N.I.N.A.** for the updated list to be populated in the plugin's interface. If no filters are defined in your active profile, the plugin will fallback to a default list (`Luminance`, `Red`, `Green`, `Blue`, `Ha`, `OIII`, `SII`).
 
 ---
 

@@ -9,7 +9,35 @@ Achieve precision polar alignment within minutes using a rock-solid 3D rotation 
 
 ---
 
-Please refer to the comprehensive **[User & Operation Manual](USER_MANUAL.md)** for detailed installation instructions, settings explanations, smart restart features, and custom polar home override guides.
+## 💾 Installation
+
+### 1. Recommended: N.I.N.A. Plugin Store (Automatic)
+The easiest and recommended way to install the plugin is directly through the official N.I.N.A. Plugin Store:
+1. Open N.I.N.A. and navigate to the **Plugins** tab on the left.
+2. Select **Available** in the top tab menu.
+3. Locate **2-Point Polar Alignment** (use search if needed) and click **Install**.
+4. Restart N.I.N.A. to activate.
+
+### 2. Manual Installation (For Development & Offline PCs)
+If you need to install the plugin manually (e.g., from a custom compiled release or on an offline computer):
+1. Download the plugin ZIP archive containing the compiled binaries.
+2. Navigate to your local AppData directory: `%LOCALAPPDATA%\NINA\Plugins\3.0.0\` (typically `C:\Users\<YourUsername>\AppData\Local\NINA\Plugins\3.0.0\`).
+3. Create a new subfolder named precisely **`2-Point Polar Alignment`**.
+4. Extract the compiled binary files into that folder:
+   - `NirZonshine.NINA.TwoPointPolarAlignment.dll`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.pdb`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.deps.json`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.runtimeconfig.json`
+   - `NirZonshine.NINA.TwoPointPolarAlignment.dll.config`
+5. Restart N.I.N.A. to activate.
+
+---
+
+> [!NOTE]
+> **Filter Selection & Profile Synchronization**:
+> The plugin's filter selection list is populated from your active N.I.N.A. profile configuration during startup. If you edit, rename, or add filters in N.I.N.A. (under Options -> Equipment -> Filter Wheel), you **must restart N.I.N.A.** for the updated filter list to be reflected in the plugin dropdown.
+
+Please refer to the comprehensive **[User & Operation Manual](USER_MANUAL.md)** for detailed settings explanations, sequencer integration details, smart restart features, and custom polar home override guides.
 
 ---
 

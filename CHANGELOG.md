@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.4.2.0 — Filter Wheel Position Resolution (2026-07-16)
+
+### ⚙️ Equipment Control & Stability
+- **Fixed Filter Wheel Position Resolution**: Corrected a bug where the plugin always commanded the filter wheel to Position 0 (slot 1) regardless of the selected filter. The plugin now dynamically queries the active profile's `FilterWheelFilters` using safe type conversions (`Convert.ToInt32()`) to determine the correct slot position index.
+- **Bypassed Filter Selection for Current Filter**: When `(Current)` is selected in the settings, the filter change command is skipped entirely, keeping the filter wheel on the user's active filter.
+
+---
+
 ## v1.4.1.0 — Live Solve Double-Precession Fix (2026-06-04)
 
 ### ✨ Core Math Accuracy

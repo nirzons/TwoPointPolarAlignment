@@ -299,8 +299,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             }
 
             if (!string.IsNullOrEmpty(_settingsManager.Filter) && _settingsManager.Filter != "(Current)") {
-                FilterInfo targetFilterInfo = new FilterInfo { Name = _settingsManager.Filter, Position = 0 };
-                ReportLog(progress, $"Changing filter to {_settingsManager.Filter}...");
+                int position = ResolveFilterPosition(_settingsManager.Filter);
+                FilterInfo targetFilterInfo = new FilterInfo { Name = _settingsManager.Filter, Position = (short)position };
+                ReportLog(progress, $"Changing filter to {_settingsManager.Filter} (Position {position})...");
                 await _filterWheelMediator.ChangeFilter(targetFilterInfo, token, new Progress<ApplicationStatus>());
             }
 
@@ -1055,6 +1056,82 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 }
                 await Task.Delay(1000, rescueToken);
             }
+        }
+
+        private int ResolveFilterPosition(string filterName) {
+            if (string.IsNullOrEmpty(filterName) || filterName == "(Current)") {
+                return 0;
+            }
+
+            try {
+                if (_profileService?.ActiveProfile != null) {
+                    var profileType = _profileService.ActiveProfile.GetType();
+                    
+                    // Try FilterWheelSettings.FilterWheelFilters
+                    var fwSettingsProp = profileType.GetProperty("FilterWheelSettings");
+                    if (fwSettingsProp != null) {
+                        var fwSettings = fwSettingsProp.GetValue(_profileService.ActiveProfile);
+                        if (fwSettings != null) {
+                            var fwFiltersProp = fwSettings.GetType().GetProperty("FilterWheelFilters");
+                            if (fwFiltersProp != null) {
+                                var fwFilters = fwFiltersProp.GetValue(fwSettings);
+                                if (fwFilters is System.Collections.IEnumerable enumerable) {
+                                    int index = 0;
+                                    foreach (var item in enumerable) {
+                                        var nameProp = item.GetType().GetProperty("Name");
+                                        if (nameProp != null) {
+                                            var name = nameProp.GetValue(item) as string;
+                                            if (name == filterName) {
+                                                var posProp = item.GetType().GetProperty("Position");
+                                                if (posProp != null) {
+                                                    return Convert.ToInt32(posProp.GetValue(item));
+                                                }
+                                                return index;
+                                            }
+                                        }
+                                        index++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback to legacy Filters or FilterSettings property
+                    var filtersProp = profileType.GetProperty("Filters") ?? profileType.GetProperty("FilterSettings");
+                    if (filtersProp != null) {
+                        var filtersValue = filtersProp.GetValue(_profileService.ActiveProfile);
+                        if (filtersValue is System.Collections.IEnumerable enumerable) {
+                            int index = 0;
+                            foreach (var item in enumerable) {
+                                var nameProp = item.GetType().GetProperty("Name");
+                                if (nameProp != null) {
+                                    var name = nameProp.GetValue(item) as string;
+                                    if (name == filterName) {
+                                        var posProp = item.GetType().GetProperty("Position");
+                                        if (posProp != null) {
+                                            return Convert.ToInt32(posProp.GetValue(item));
+                                        }
+                                        return index;
+                                    }
+                                }
+                                index++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                // Fail-safe suppression
+            }
+
+            // Default fallback if we couldn't match the reflected names
+            var defaultFilters = new List<string> { "Luminance", "Red", "Green", "Blue", "Ha", "OIII", "SII" };
+            int fallbackIndex = defaultFilters.IndexOf(filterName);
+            if (fallbackIndex >= 0) {
+                return fallbackIndex;
+            }
+
+            return 0;
         }
 
     }

@@ -5,7 +5,7 @@
     <RootNamespace>NirZonshine.NINA.TwoPointPolarAlignment</RootNamespace>
     <AssemblyName>NirZonshine.NINA.TwoPointPolarAlignment</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <Version>1.4.1.0</Version>
+    <Version>1.4.2.0</Version>
     <UseWPF>true</UseWPF>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -18,6 +18,6 @@
   </ItemGroup>
   <PropertyGroup />
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins\3.0.0&quot; (&#xD;&#xA;  mkdir &quot;%25localappdata%25\NINA\Plugins\3.0.0&quot;&#xD;&#xA;)&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins\3.0.0\TwoPointPolarAlignment&quot; (&#xD;&#xA;  mkdir &quot;%25localappdata%25\NINA\Plugins\3.0.0\TwoPointPolarAlignment&quot;&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;echo &quot;Copying built binaries to 3.0.0 directory&quot;&#xD;&#xA;xcopy &quot;$(TargetDir)*.*&quot; &quot;%25localappdata%25\NINA\Plugins\3.0.0\TwoPointPolarAlignment&quot; /y /i /e&#xD;&#xA;  " />
+    <Exec Command="&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins\3.0.0&quot; (&#xD;&#xA;  mkdir &quot;%25localappdata%25\NINA\Plugins\3.0.0&quot;&#xD;&#xA;)&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins\3.0.0\2-Point Polar Alignment&quot; (&#xD;&#xA;  mkdir &quot;%25localappdata%25\NINA\Plugins\3.0.0\2-Point Polar Alignment&quot;&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;echo &quot;Copying built binaries to 3.0.0\2-Point Polar Alignment directory&quot;&#xD;&#xA;xcopy &quot;$(TargetDir)*.*&quot; &quot;%25localappdata%25\NINA\Plugins\3.0.0\2-Point Polar Alignment&quot; /y /i /e&#xD;&#xA;  " />
   </Target>
 </Project>
