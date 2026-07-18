@@ -842,13 +842,33 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             IsRunning = true;
             alignmentCts = new System.Threading.CancellationTokenSource();
             RaisePropertyChanged(nameof(CanStart));
+            
+            bool isLiveAdjusting = false;
+            int stableCount = 0;
+
             // W-3 Fix: Construct Progress<T> on the UI thread so callbacks marshal via SynchronizationContext
             var progress = new Progress<AlignmentProgressReport>(report => {
                 if (report.LogMessage != null) Log(report.LogMessage);
                 if (report.IsReversedFlowActive.HasValue) IsReversedFlowActive = report.IsReversedFlowActive.Value;
                 if (report.IsBlindSolvingActive.HasValue) IsBlindSolvingActive = report.IsBlindSolvingActive.Value;
+                
+                if (report.HasSuccessfulAlignmentReached) {
+                    isLiveAdjusting = true;
+                }
+
                 if (report.StatusText != null && report.StatusColorHex != null) {
-                    SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
+                    // Update dashboard status in GUI
+                    if (IsRunningFromSequence && RunningSequenceItem != null && RunningSequenceItem.AutoCompleteTolerance > 0.0 && isLiveAdjusting) {
+                        if (report.StatusText == "Could not solve") {
+                            stableCount = 0;
+                            Log($"[Sequence] Plate solve failed. Resetting stable count (Stable: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures})");
+                            SetStatus($"Could Not Solve (Stable: 0/{RunningSequenceItem.AutoCompleteStableExposures})", StatusFailureColor);
+                        } else {
+                            SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
+                        }
+                    } else {
+                        SetStatus(report.StatusText, CreateFrozenBrush(report.StatusColorHex));
+                    }
                 }
                 if (report.AltitudeError != null) {
                     AltitudeError = report.AltitudeError;
@@ -856,7 +876,32 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
                 if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
                 if (report.TotalError != null) TotalError = report.TotalError;
-                if (report.TotalErrorValue > 0) TotalErrorValue = report.TotalErrorValue;
+                
+                if (report.TotalErrorValue > 0) {
+                    TotalErrorValue = report.TotalErrorValue;
+                    
+                    if (IsRunningFromSequence && RunningSequenceItem != null && RunningSequenceItem.AutoCompleteTolerance > 0.0 && isLiveAdjusting) {
+                        if (report.TotalErrorValue <= RunningSequenceItem.AutoCompleteTolerance) {
+                            stableCount++;
+                            Log($"[Sequence] Error ({report.TotalErrorValue:F2}′) is below tolerance ({RunningSequenceItem.AutoCompleteTolerance:F2}′). Stable count: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures}");
+                            
+                            // Override status text on dashboard
+                            SetStatus($"Adjusting (Stable: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures} | Error: {report.TotalErrorValue:F2}′)", StatusTrackingColor);
+                            
+                            if (stableCount >= RunningSequenceItem.AutoCompleteStableExposures) {
+                                Log($"[Sequence] Target alignment achieved and stable. Auto-advancing...");
+                                RunningSequenceItem.Resume();
+                            }
+                        } else {
+                            if (stableCount > 0) {
+                                Log($"[Sequence] Error ({report.TotalErrorValue:F2}′) rose above tolerance ({RunningSequenceItem.AutoCompleteTolerance:F2}′). Resetting stable count.");
+                            }
+                            stableCount = 0;
+                            SetStatus($"Adjusting (Stable: 0/{RunningSequenceItem.AutoCompleteStableExposures} | Error: {report.TotalErrorValue:F2}′)", StatusWarningColor);
+                        }
+                    }
+                }
+                
                 if (report.AltitudeInstruction != null) AltitudeInstruction = report.AltitudeInstruction;
                 if (report.AzimuthInstruction != null) AzimuthInstruction = report.AzimuthInstruction;
                 IsAltitudePriority = report.IsAltitudePriority;
@@ -891,6 +936,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 } finally {
                     bool triggerHome = requestedHome;
                     requestedHome = false;
+                    
+                    try {
+                        if (lastStoppedCoordinates == null && telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                            var pos = telescopeMediator.GetCurrentPosition();
+                            if (pos != null) {
+                                lastStoppedCoordinates = pos;
+                                lastStoppedDirection = IsReversedFlowActive ? 
+                                    (Direction == RotationDirection.East ? RotationDirection.West : RotationDirection.East) : 
+                                    Direction;
+                                Log($"[Smart Restart] Saved last stopped position: RA {pos.RA:F2}h, Dec {pos.Dec:F2}° (Direction: {lastStoppedDirection})");
+                            }
+                        }
+                    } catch { }
+
+                    // If running from sequence, and alignment terminates without resume, wake sequencer up as aborted
+                    if (IsRunningFromSequence && RunningSequenceItem != null) {
+                        RunningSequenceItem.ResumeTcs?.TrySetResult(false);
+                    }
+
                     IsRunning = false;
                     Interlocked.Exchange(ref _taskExecutingFlag, 0);
                     RaisePropertyChanged(nameof(CanStart));
@@ -970,12 +1034,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 ActivePreRotate = Method == RotationMethod.Automatic && StartingPoint == StartingPointMode.PreRotateHalfRange,
                 LastStoppedCoordinates = lastStoppedCoordinates,
                 LastStoppedDirection = lastStoppedDirection,
+                IsRunningFromSequence = IsRunningFromSequence,
+                SequenceResumeTcs = RunningSequenceItem?.ResumeTcs
             };
             
             // Clear lastStoppedCoordinates and lastStoppedDirection so they only apply to the immediately following start command
             lastStoppedCoordinates = null;
             lastStoppedDirection = null;
-
+ 
             await controller.ExecuteWorkflowAsync(context, cts.Token, progress, thumbnail => {
                 System.Windows.Application.Current.Dispatcher.Invoke(() => { LastFrame = thumbnail; });
             });

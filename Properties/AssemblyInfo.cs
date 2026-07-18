@@ -7,8 +7,8 @@ using System.Runtime.InteropServices;
 
 // [MANDATORY] The assembly versioning
 //Should be incremented for each new release build of a plugin
-[assembly: AssemblyVersion("1.4.2.0")]
-[assembly: AssemblyFileVersion("1.4.2.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 
 // [MANDATORY] The name of your plugin
 [assembly: AssemblyTitle("2-Point Polar Alignment")]
@@ -45,13 +45,23 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyMetadata("ChangelogURL", "https://github.com/nirzons/TwoPointPolarAlignment/blob/main/CHANGELOG.md")]
 
 //[Optional] The url to a featured logo that will be displayed in the plugin list next to the name
-[assembly: AssemblyMetadata("FeaturedImageURL", "")]
+[assembly: AssemblyMetadata("FeaturedImageURL", "https://raw.githubusercontent.com/nirzons/TwoPointPolarAlignment/master/logo.png")]
 //[Optional] A url to an example screenshot of your plugin in action
 [assembly: AssemblyMetadata("ScreenshotURL", "")]
 //[Optional] An additional url to an example example screenshot of your plugin in action
 [assembly: AssemblyMetadata("AltScreenshotURL", "")]
 //[Optional] An in-depth description of your plugin
-[assembly: AssemblyMetadata("LongDescription", @"")]
+[assembly: AssemblyMetadata("LongDescription", @"A premium, lightweight, and highly accurate polar alignment plugin for N.I.N.A. (Nighttime Imaging 'N' Astronomy).
+
+Achieve sub-arcminute polar alignment within minutes using a rock-solid 3D rotation matrix solver requiring only two plate-solved images and a short 90-degree RA rotation.
+
+Key Features:
+- Two-Point Simplicity: No view of the celestial pole required. Aligns starting from your mount's natural home position.
+- Advanced Sequencer Integration: Run polar alignment fully automatically with custom tolerances and verification passes.
+- Multi-Frame Sampling: Averages out seeing jitter and wind gusts via single, double, or triple exposures per point.
+- LST Time-Drift Normalization: Mathematically corrects for Earth's sidereal rotation during mount movement.
+- Hemisphere Adaptive: Northern/Southern hemisphere support with intuitive visual indicators.
+- Rough Finder Rescue Mode: Hardened failsafe recovery using secondary blind solvers if initial pointing is significantly off-axis.")]
 
 // Setting ComVisible to false makes the types in this assembly not visible
 // to COM components.  If you need to access a type in this assembly from

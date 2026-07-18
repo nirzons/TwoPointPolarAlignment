@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.0.0 — Automated Sequencer Auto-Complete & Verification Passes (2026-07-18)
+
+### 🤖 Advanced Automation & Sequencer Control
+- **Added Auto-Complete on Target**: Exposes a target error tolerance (in arcminutes) inside the Advanced Sequencer block. When the polar error stays below this target, the plugin automatically completes and advances the sequence. Set to 0 to keep the manual resume flow.
+- **Added Consecutive Stable Frames Validation**: Requires the error to stay below the tolerance for a set number of consecutive frames (default 3) before auto-completing, ensuring the mount is physically settled. The counter is immediately reset on any plate solve failure or error spike above the target.
+- **Added Reverse-Direction Verification Passes**: Exposes a validation runs parameter. When set, the plugin automatically restarts the alignment cycle in the reverse direction (using the built-in Smart Restart rotation logic) to verify that the physical adjustments are consistent, backlash has settled, and the locked mount remains aligned in both RA directions.
+- **Improved Status Reporting**: Continuously broadcasts the current pass, measured error, and stable frame count (e.g. `Pass 1/2: Adjusting (Error: 1.25′ | Stable: 2/3)`) to both the N.I.N.A. sequencer progress and the main plugin dashboard GUI status indicator.
+- **Linked Cancellation token & Hard Timeout Aborts**: Linked N.I.N.A.'s sequencer abort trigger for instantaneous response, and added a 15-second shutdown timeout safeguard that throws a `TimeoutException` to abort sequence execution cleanly in case of unresponsive camera/mount drivers.
+
+### 🎨 Cosmetic & Store Presentation Improvements
+- **Custom Featured Logo**: Added a premium custom logo (`logo.png`) that displays next to the plugin name and in the details pane of N.I.N.A.'s plugin manager.
+- **Improved Store Description**: Replaced the long description in N.I.N.A.'s plugin metadata with a clean, structured overview of key features.
+
+---
+
 ## v1.4.2.0 — Filter Wheel Position Resolution (2026-07-16)
 
 ### ⚙️ Equipment Control & Stability

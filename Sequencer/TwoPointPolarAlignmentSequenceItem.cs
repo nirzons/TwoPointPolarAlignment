@@ -254,6 +254,47 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
+        private double autoCompleteTolerance = 0.0;
+        [JsonProperty]
+        public double AutoCompleteTolerance {
+            get => autoCompleteTolerance;
+            set {
+                if (autoCompleteTolerance != value) {
+                    autoCompleteTolerance = value;
+                    RaisePropertyChanged(nameof(AutoCompleteTolerance));
+                    RaisePropertyChanged(nameof(IsAutoCompleteEnabled));
+                }
+            }
+        }
+
+        private int autoCompleteStableExposures = 3;
+        [JsonProperty]
+        public int AutoCompleteStableExposures {
+            get => autoCompleteStableExposures;
+            set {
+                if (autoCompleteStableExposures != value) {
+                    autoCompleteStableExposures = value;
+                    RaisePropertyChanged(nameof(AutoCompleteStableExposures));
+                }
+            }
+        }
+
+        private int verificationPasses = 0;
+        [JsonProperty]
+        public int VerificationPasses {
+            get => verificationPasses;
+            set {
+                if (verificationPasses != value) {
+                    verificationPasses = value;
+                    RaisePropertyChanged(nameof(VerificationPasses));
+                }
+            }
+        }
+
+        public bool IsAutoCompleteEnabled => AutoCompleteTolerance > 0.0;
+
+        public TaskCompletionSource<bool> ResumeTcs => resumeTcs;
+
         private TaskCompletionSource<bool> resumeTcs;
 
         public void Resume() {
@@ -274,45 +315,107 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 throw new InvalidOperationException("2-Point Polar Alignment failed: Telescope mount is not connected!");
             }
 
-            progress.Report(new global::NINA.Core.Model.ApplicationStatus { Status = "Executing 2-Point Polar Alignment Sequence Item" });
-            resumeTcs = new TaskCompletionSource<bool>();
-
-            // Setup sequence item as the active running sequencer item in the VM
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                vm.RunningSequenceItem = this;
-                // Apply overrides
-                vm.SettingsManager.SetOverrides(
-                    ExposureTime,
-                    Gain,
-                    RotationAmount,
-                    Filter,
-                    Method,
-                    Direction,
-                    StartingPoint,
-                    Binning,
-                    Offset,
-                    PlateSolveRetries,
-                    EnableOnePointAlignment,
-                    ExposuresPerPoint
-                );
-                
-                // Automatically launch the first alignment run!
-                if (vm.CanStart) {
-                    vm.StartAlignment();
-                }
-            });
+            int remainingRetries = VerificationPasses;
+            int totalPasses = VerificationPasses + 1;
+            int currentPass = 1;
 
             try {
-                // Await until either the user clicks Resume Sequence (resumeTcs completes)
-                // OR the user cancels the sequence in N.I.N.A. (token is canceled)
-                using (token.Register(() => resumeTcs.TrySetCanceled(token))) {
-                    await resumeTcs.Task;
+                while (true) {
+                    token.ThrowIfCancellationRequested();
+                    resumeTcs = new TaskCompletionSource<bool>();
+
+                    using (token.Register(() => {
+                        System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                            if (vm.IsRunning) {
+                                vm.StopAlignment();
+                            }
+                        });
+                        resumeTcs.TrySetCanceled();
+                    })) {
+                        // Setup sequence item as the active running sequencer item in the VM
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                            vm.RunningSequenceItem = this;
+                            // Apply overrides
+                            vm.SettingsManager.SetOverrides(
+                                ExposureTime,
+                                Gain,
+                                RotationAmount,
+                                Filter,
+                                Method,
+                                Direction,
+                                StartingPoint,
+                                Binning,
+                                Offset,
+                                PlateSolveRetries,
+                                EnableOnePointAlignment,
+                                ExposuresPerPoint
+                            );
+
+                            // Automatically launch the alignment run!
+                            if (vm.CanStart) {
+                                vm.StartAlignment();
+                            }
+                        });
+
+                        // Report status progress to N.I.N.A. sequencer
+                        progress.Report(new global::NINA.Core.Model.ApplicationStatus { 
+                            Status = $"2-Point Polar Alignment: Pass {currentPass}/{totalPasses} starting..." 
+                        });
+
+                        try {
+                            await resumeTcs.Task;
+                        }
+                        catch (OperationCanceledException) {
+                            token.ThrowIfCancellationRequested();
+                            throw;
+                        }
+                    }
+
+                    if (remainingRetries <= 0) {
+                        break;
+                    }
+
+                    remainingRetries--;
+                    currentPass++;
+
+                    // Stop the active run to prepare for the reverse pass (saving lastStoppedCoordinates)
+                    progress.Report(new global::NINA.Core.Model.ApplicationStatus { 
+                        Status = $"Pass {currentPass - 1} target reached. Stopping for reverse pass..." 
+                    });
+
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                        if (vm.IsRunning) {
+                            vm.StopAlignment();
+                        }
+                    });
+
+                    // Wait for active run to cleanly terminate (with 15s timeout)
+                    var timeoutTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    try {
+                        using (var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutTokenSource.Token, token)) {
+                            while (vm.IsRunning) {
+                                combinedCts.Token.ThrowIfCancellationRequested();
+                                await Task.Delay(100, token);
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException) {
+                        if (timeoutTokenSource.Token.IsCancellationRequested) {
+                            throw new TimeoutException("Timed out waiting for polar alignment workflow to stop. Hardware may be unresponsive.");
+                        }
+                        throw; // standard token cancellation
+                    }
+                    finally {
+                        timeoutTokenSource.Dispose();
+                    }
+
+                    // 2-second settling delay for camera/mount
+                    await Task.Delay(2000, token);
                 }
             }
             finally {
                 // Clean up overrides and state
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    // Make sure we stop any active internal alignment workflow run when sequence item finishes or cancels
                     if (vm.IsRunning) {
                         vm.StopAlignment();
                     }
@@ -340,6 +443,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 PlateSolveRetries = this.PlateSolveRetries,
                 EnableOnePointAlignment = this.EnableOnePointAlignment,
                 ExposuresPerPoint = this.ExposuresPerPoint,
+                AutoCompleteTolerance = this.AutoCompleteTolerance,
+                AutoCompleteStableExposures = this.AutoCompleteStableExposures,
+                VerificationPasses = this.VerificationPasses,
                 PolarAlignmentDockableVM = this.PolarAlignmentDockableVM,
                 CameraMediator = this.CameraMediator,
                 TelescopeMediator = this.TelescopeMediator

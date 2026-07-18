@@ -654,7 +654,7 @@
                     </WrapPanel>
 
                     <!-- Row 3: Plate Solve Retries, Exposures Per Point, Rescue Mode -->
-                    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
                         <!-- Plate Solve Retries -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Plate Solve Retries" VerticalAlignment="Center" Margin="0,0,5,0" />
@@ -671,6 +671,28 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Rough Finder Rescue Mode" VerticalAlignment="Center" Margin="0,0,5,0" ToolTip="Enables an interactive rescue mode to guide you back if the mount points too far from the pole or if plate solving fails." />
                             <CheckBox IsChecked="{Binding EnableOnePointAlignment, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" ToolTip="Enables an interactive rescue mode to guide you back if the mount points too far from the pole or if plate solving fails." />
+                        </StackPanel>
+                    </WrapPanel>
+
+                    <!-- Row 4: Auto-Complete Tolerance, Stable Frames, Verification Passes -->
+                    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Auto-Complete Tolerance -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" ToolTip="The target polar alignment error in arcminutes below which the sequence will automatically proceed. Set to 0 to disable.">
+                            <TextBlock Text="Auto-Complete Tolerance" VerticalAlignment="Center" Margin="0,0,5,0" />
+                            <TextBox Text="{Binding AutoCompleteTolerance, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBlock Text="′" VerticalAlignment="Center" Margin="2,0,0,0" />
+                        </StackPanel>
+
+                        <!-- Stable Frames -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" IsEnabled="{Binding IsAutoCompleteEnabled}" ToolTip="Number of consecutive solved frames that must remain below the tolerance threshold before advancing.">
+                            <TextBlock Text="Stable Frames" VerticalAlignment="Center" Margin="0,0,5,0" />
+                            <TextBox Text="{Binding AutoCompleteStableExposures, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                        </StackPanel>
+
+                        <!-- Verification Passes -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" IsEnabled="{Binding IsAutoCompleteEnabled}" ToolTip="Number of reverse-direction validation passes to perform before final completion.">
+                            <TextBlock Text="Verification Passes" VerticalAlignment="Center" Margin="0,0,5,0" />
+                            <TextBox Text="{Binding VerificationPasses, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
                     </WrapPanel>
                 </StackPanel>
