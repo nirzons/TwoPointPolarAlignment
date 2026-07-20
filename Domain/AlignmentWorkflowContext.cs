@@ -26,5 +26,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Domain {
         
         public bool IsRunningFromSequence { get; set; }
         public System.Threading.Tasks.TaskCompletionSource<bool> SequenceResumeTcs { get; set; }
+        public bool MeasureOnly { get; set; }
+        public bool ForceHomePosition { get; set; } = true;
     }
 }

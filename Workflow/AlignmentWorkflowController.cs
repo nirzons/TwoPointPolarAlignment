@@ -187,6 +187,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         progress.Report(new AlignmentProgressReport { IsReversedFlowActive = isReversed });
                     }
                     else {
+                        if (context.ForceHomePosition) {
+                            if (_settingsManager.OverrideMountHome) {
+                                Coordinates polarHomeCoords = new Coordinates(_settingsManager.PolarHomeRA, _settingsManager.PolarHomeDec, Epoch.J2000, Coordinates.RAType.Hours);
+                                ReportLog(progress, $"[Force Home Position] Slewing mount to Custom Polar Home (RA: {polarHomeCoords.RA:F2}h, Dec: {polarHomeCoords.Dec:F2}°)...");
+                                await _telescopeMediator.SlewToCoordinatesAsync(polarHomeCoords, token);
+                                await _telescopeMediator.WaitForSlew(token);
+                            } else if (info.CanFindHome) {
+                                ReportLog(progress, "[Force Home Position] Commanding mount to Find Home position...");
+                                await _telescopeMediator.FindHome(new Progress<global::NINA.Core.Model.ApplicationStatus>(), token);
+                            } else {
+                                ReportLog(progress, "[Force Home Position] Mount does not support physical homing command (CanFindHome=false). Proceeding with current position validation.");
+                            }
+
+                            currentPosition = _telescopeMediator.GetCurrentPosition();
+                            if (currentPosition != null) {
+                                isNearPole = Math.Abs(Math.Abs(currentPosition.Dec) - 90.0) < 1.0;
+                            }
+                        }
+
                         double rotationHours = _settingsManager.RotationAmount / 15.0;
 
                         // 1. Custom Polar Home Override Check
@@ -650,6 +669,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2, context.Coordinates2.Epoch);
             progress.Report(new AlignmentProgressReport { HasSuccessfulAlignmentReached = true });
 
+            if (context.MeasureOnly) {
+                ReportLog(progress, "Measurement complete. Exiting sequencer step.");
+                return;
+            }
+
             int binVal = 1;
             if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
             CaptureSequence seq = new CaptureSequence {
@@ -788,10 +812,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 else report.AltitudeInstruction = "Aligned";
             }
 
-            if (total <= 1.0) { report.TotalErrorRating = "✨ Excellent Alignment"; report.TotalErrorRatingColorHex = "#00FF7F"; }
-            else if (total <= 3.0) { report.TotalErrorRating = "🟢 Good Alignment"; report.TotalErrorRatingColorHex = "#98FB98"; }
-            else if (total <= 10.0) { report.TotalErrorRating = "🟡 Fair Alignment"; report.TotalErrorRatingColorHex = "#FFD700"; }
-            else { report.TotalErrorRating = "🔴 Poor Alignment"; report.TotalErrorRatingColorHex = "#FF4D4D"; }
+            if (total <= 1.0) { report.TotalErrorRating = "Excellent Alignment"; report.TotalErrorRatingColorHex = "#00FF7F"; }
+            else if (total <= 3.0) { report.TotalErrorRating = "Good Alignment"; report.TotalErrorRatingColorHex = "#98FB98"; }
+            else if (total <= 10.0) { report.TotalErrorRating = "Fair Alignment"; report.TotalErrorRatingColorHex = "#FFD700"; }
+            else { report.TotalErrorRating = "Poor Alignment"; report.TotalErrorRatingColorHex = "#FF4D4D"; }
 
             progress.Report(report);
         }
@@ -908,7 +932,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         progress.Report(new ManualTrackingProgress {
                             CurrentDegrees = rotDeltaDegrees,
                             TargetDegrees = targetDegrees,
-                            StatusText = isLocked ? "✨ Target angle reached! Ready to lock." : "Tracking lock active. Last solve successful.",
+                            StatusText = isLocked ? "Target angle reached! Ready to lock." : "Tracking lock active. Last solve successful.",
                             IsLocked = isLocked
                         });
                     } else {
@@ -1040,7 +1064,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     ReportAlignmentProgress(progress, mockAxis, currentCoords.RA, lat, currentCoords.RA, currentCoords.Epoch);
 
                     if (distToPole < 5.0) {
-                        ReportLog(progress, "★ TARGET ZONE ACQUIRED! Rescued into the < 5.0° radius region.");
+                        ReportLog(progress, "TARGET ZONE ACQUIRED! Rescued into the < 5.0° radius region.");
                         if (OnInterventionRequested != null) {
                             await OnInterventionRequested(new RescuePromptArgs {
                                 Title = "Target Zone Acquired",

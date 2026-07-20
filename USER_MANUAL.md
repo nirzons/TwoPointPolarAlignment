@@ -1,5 +1,5 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: v1.5.0.0*
+*Applicable Version: v1.5.1.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
@@ -117,11 +117,14 @@ When the sequencer executes the instruction:
 6. Once you are satisfied with the polar error numbers, click the **`[Resume Sequence]`** button.
 7. The plugin instantly halts the live loop, unbinds all settings overrides, unlocks the user interface, marks the sequence item as successful, and N.I.N.A. immediately advances to the next step in your imaging run!
 
-### 5. Automated Sequence Auto-Complete & Verification Passes
-From version 1.5.0.0, you can fully automate the completion of the sequencer instruction without manual clicks:
+### 5. Automated Sequence Auto-Complete, Verification Passes, Measurement Only & Force Home Position
+From version 1.5.1.0, you can automate or customize the completion and homing behavior of the sequencer instruction:
+* **Force Home Position**: Enabled (`true`) by default. When checked, the plugin automatically commands the mount to find its Home position (or slews to your locked Custom Polar Home if *Override Mount Home* is active) before starting the alignment routine. When unchecked, the plugin assumes the mount is already at home or in a position ready for alignment.
+* **Measurement Only**: When checked, the plugin performs the initial two measurements, logs the results, and immediately auto-completes and advances the sequence without entering the live adjustment loop. This is designed for permanent observatories that want to programmatically check their polar alignment drift over time.
 * **Auto-Complete Tolerance**: Specify a target polar error threshold in arcminutes (e.g. `1.0`′). If set to `0.0`, auto-complete is disabled, and manual resume is required.
 * **Stable Frames**: The number of consecutive solved frames (default `3`) that must remain below the tolerance threshold to trigger completion. This prevents premature completion due to seeing jitter or wind during adjustments. If a plate solve fails or error spikes above the tolerance, the stability counter is immediately reset to `0`.
 * **Verification Passes**: Specify the number of validation sweeps to perform in the opposite direction (default `0`). If set to `1` or more, once the target error is stable, the plugin automatically stops, slews the mount in the **reverse direction** back to home (leveraging the plugin's Smart Restart rotation safety logic), recalculates the polar alignment from scratch, and ensures it remains below the tolerance before finally advancing. This validates that your physical adjustments are mechanically stable and gear backlash has settled.
+* **Real-time Error Display**: The measured total polar error is dynamically updated in the title of the instruction block (e.g. `2-Point Polar Alignment (01' 10")`) as well as on the right-hand side of the instruction block under a "Total Error" label, making it visible on both the Sequencer and Imaging tabs during and after sequence completion.
 
 ---
 

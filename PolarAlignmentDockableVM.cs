@@ -875,29 +875,40 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     IsPreviousAlignmentDimmed = false;
                 }
                 if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
-                if (report.TotalError != null) TotalError = report.TotalError;
+                if (report.TotalError != null) {
+                    TotalError = report.TotalError;
+                    if (RunningSequenceItem != null) {
+                        RunningSequenceItem.CurrentErrorDisplay = report.TotalError;
+                    }
+                }
                 
                 if (report.TotalErrorValue > 0) {
                     TotalErrorValue = report.TotalErrorValue;
                     
-                    if (IsRunningFromSequence && RunningSequenceItem != null && RunningSequenceItem.AutoCompleteTolerance > 0.0 && isLiveAdjusting) {
-                        if (report.TotalErrorValue <= RunningSequenceItem.AutoCompleteTolerance) {
-                            stableCount++;
-                            Log($"[Sequence] Error ({report.TotalErrorValue:F2}′) is below tolerance ({RunningSequenceItem.AutoCompleteTolerance:F2}′). Stable count: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures}");
-                            
-                            // Override status text on dashboard
-                            SetStatus($"Adjusting (Stable: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures} | Error: {report.TotalErrorValue:F2}′)", StatusTrackingColor);
-                            
-                            if (stableCount >= RunningSequenceItem.AutoCompleteStableExposures) {
-                                Log($"[Sequence] Target alignment achieved and stable. Auto-advancing...");
-                                RunningSequenceItem.Resume();
+                    if (IsRunningFromSequence && RunningSequenceItem != null) {
+                        if (RunningSequenceItem.MeasureOnly) {
+                            Log("[Sequence] Measurement Only mode active. Target measured. Auto-advancing...");
+                            RunningSequenceItem.Resume();
+                        }
+                        else if (RunningSequenceItem.AutoCompleteTolerance > 0.0 && isLiveAdjusting) {
+                            if (report.TotalErrorValue <= RunningSequenceItem.AutoCompleteTolerance) {
+                                stableCount++;
+                                Log($"[Sequence] Error ({report.TotalErrorValue:F2}′) is below tolerance ({RunningSequenceItem.AutoCompleteTolerance:F2}′). Stable count: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures}");
+                                
+                                // Override status text on dashboard
+                                SetStatus($"Adjusting (Stable: {stableCount}/{RunningSequenceItem.AutoCompleteStableExposures} | Error: {report.TotalErrorValue:F2}′)", StatusTrackingColor);
+                                
+                                if (stableCount >= RunningSequenceItem.AutoCompleteStableExposures) {
+                                    Log($"[Sequence] Target alignment achieved and stable. Auto-advancing...");
+                                    RunningSequenceItem.Resume();
+                                }
+                            } else {
+                                if (stableCount > 0) {
+                                    Log($"[Sequence] Error ({report.TotalErrorValue:F2}′) rose above tolerance ({RunningSequenceItem.AutoCompleteTolerance:F2}′). Resetting stable count.");
+                                }
+                                stableCount = 0;
+                                SetStatus($"Adjusting (Stable: 0/{RunningSequenceItem.AutoCompleteStableExposures} | Error: {report.TotalErrorValue:F2}′)", StatusWarningColor);
                             }
-                        } else {
-                            if (stableCount > 0) {
-                                Log($"[Sequence] Error ({report.TotalErrorValue:F2}′) rose above tolerance ({RunningSequenceItem.AutoCompleteTolerance:F2}′). Resetting stable count.");
-                            }
-                            stableCount = 0;
-                            SetStatus($"Adjusting (Stable: 0/{RunningSequenceItem.AutoCompleteStableExposures} | Error: {report.TotalErrorValue:F2}′)", StatusWarningColor);
                         }
                     }
                 }
@@ -1035,7 +1046,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 LastStoppedCoordinates = lastStoppedCoordinates,
                 LastStoppedDirection = lastStoppedDirection,
                 IsRunningFromSequence = IsRunningFromSequence,
-                SequenceResumeTcs = RunningSequenceItem?.ResumeTcs
+                SequenceResumeTcs = RunningSequenceItem?.ResumeTcs,
+                MeasureOnly = RunningSequenceItem?.MeasureOnly ?? false,
+                ForceHomePosition = RunningSequenceItem?.ForceHomePosition ?? true
             };
             
             // Clear lastStoppedCoordinates and lastStoppedDirection so they only apply to the immediately following start command
@@ -1140,7 +1153,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     LastStoppedCoordinates = null,
                     LastStoppedDirection = null,
                     IsRunningFromSequence = true,
-                    SequenceResumeTcs = resumeTcs
+                    SequenceResumeTcs = resumeTcs,
+                    MeasureOnly = sequenceItem.MeasureOnly,
+                    ForceHomePosition = sequenceItem.ForceHomePosition
                 };
 
                 await controller.ExecuteWorkflowAsync(context, token, progress, thumbnail => {

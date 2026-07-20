@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.1.0 — Sequencer Measurement Only & Error Display (2026-07-19)
+
+### 🤖 Sequencer Enhancements
+- **Added Force Home Position Option**: Exposes a "Force Home Position" checkbox (enabled by default). When set, the plugin commands the mount to find Home (or slews to your Custom Polar Home) before starting alignment measurements.
+- **Added Measurement Only Mode**: Exposes a "Measurement Only" checkbox in the sequencer parameters. When enabled, the plugin completes the initial two measurements, logs the results, and immediately auto-completes and advances the sequence without entering the live adjustment loop.
+- **Added Real-time Error Display**: Dynamically displays the measured alignment error (e.g. `00° 01' 24"`) in bold under the "Total Error" label on the right side of the sequencer instruction block, as well as updating the instruction title (e.g. `2-Point Polar Alignment (01' 10")`). This display is active in both the Sequencer screen and the Imaging panel.
+
+---
+
 ## v1.5.0.0 — Automated Sequencer Auto-Complete & Verification Passes (2026-07-18)
 
 ### 🤖 Advanced Automation & Sequencer Control

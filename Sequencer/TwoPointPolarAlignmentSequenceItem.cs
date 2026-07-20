@@ -263,6 +263,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     autoCompleteTolerance = value;
                     RaisePropertyChanged(nameof(AutoCompleteTolerance));
                     RaisePropertyChanged(nameof(IsAutoCompleteEnabled));
+                    RaisePropertyChanged(nameof(IsStableFramesAllowed));
+                    RaisePropertyChanged(nameof(IsVerificationPassesAllowed));
                 }
             }
         }
@@ -293,6 +295,58 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         public bool IsAutoCompleteEnabled => AutoCompleteTolerance > 0.0;
 
+        private bool forceHomePosition = true;
+        [JsonProperty]
+        public bool ForceHomePosition {
+            get => forceHomePosition;
+            set {
+                if (forceHomePosition != value) {
+                    forceHomePosition = value;
+                    RaisePropertyChanged(nameof(ForceHomePosition));
+                }
+            }
+        }
+
+        private bool measureOnly = false;
+        [JsonProperty]
+        public bool MeasureOnly {
+            get => measureOnly;
+            set {
+                if (measureOnly != value) {
+                    measureOnly = value;
+                    RaisePropertyChanged(nameof(MeasureOnly));
+                    RaisePropertyChanged(nameof(IsAutoCompleteAllowed));
+                    RaisePropertyChanged(nameof(IsStableFramesAllowed));
+                    RaisePropertyChanged(nameof(IsVerificationPassesAllowed));
+                }
+            }
+        }
+
+        private string currentErrorDisplay = "--";
+        [JsonProperty]
+        public string CurrentErrorDisplay {
+            get => currentErrorDisplay;
+            set {
+                if (currentErrorDisplay != value) {
+                    currentErrorDisplay = value;
+                    RaisePropertyChanged(nameof(CurrentErrorDisplay));
+                    
+                    if (!string.IsNullOrEmpty(value) && value != "--") {
+                        Name = $"2-Point Polar Alignment ({value})";
+                    } else {
+                        Name = "2-Point Polar Alignment";
+                    }
+                    RaisePropertyChanged(nameof(Name));
+                }
+            }
+        }
+
+        public bool IsAutoCompleteAllowed => !MeasureOnly;
+
+        public bool IsStableFramesAllowed => !MeasureOnly && IsAutoCompleteEnabled;
+
+        public bool IsVerificationPassesAllowed => !MeasureOnly && IsAutoCompleteEnabled;
+
         public TaskCompletionSource<bool> ResumeTcs => resumeTcs;
 
         private TaskCompletionSource<bool> resumeTcs;
@@ -315,8 +369,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 throw new InvalidOperationException("2-Point Polar Alignment failed: Telescope mount is not connected!");
             }
 
-            int remainingRetries = VerificationPasses;
-            int totalPasses = VerificationPasses + 1;
+            int remainingRetries = MeasureOnly ? 0 : VerificationPasses;
+            int totalPasses = remainingRetries + 1;
             int currentPass = 1;
 
             try {
@@ -427,7 +481,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
 
         public override object Clone() {
             return new TwoPointPolarAlignmentSequenceItem {
-                Name = this.Name,
+                Name = "2-Point Polar Alignment",
                 Description = this.Description,
                 Icon = this.Icon,
                 Category = this.Category,
@@ -446,10 +500,20 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 AutoCompleteTolerance = this.AutoCompleteTolerance,
                 AutoCompleteStableExposures = this.AutoCompleteStableExposures,
                 VerificationPasses = this.VerificationPasses,
+                MeasureOnly = this.MeasureOnly,
+                ForceHomePosition = this.ForceHomePosition,
+                CurrentErrorDisplay = "--",
                 PolarAlignmentDockableVM = this.PolarAlignmentDockableVM,
                 CameraMediator = this.CameraMediator,
                 TelescopeMediator = this.TelescopeMediator
             };
+        }
+
+        public override void ResetProgress() {
+            base.ResetProgress();
+            CurrentErrorDisplay = "--";
+            Name = "2-Point Polar Alignment";
+            RaisePropertyChanged(nameof(Name));
         }
     }
 }
