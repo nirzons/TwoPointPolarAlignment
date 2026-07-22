@@ -363,7 +363,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 ImageType = "LIGHT",
                 Gain = _settingsManager.Gain,
                 Binning = new BinningMode((short)binVal, (short)binVal),
-                FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                FilterType = GetTargetFilterInfo(),
                 Offset = _settingsManager.Offset,
                 Enabled = true,
                 TotalExposureCount = 1
@@ -621,7 +621,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
                     CaptureSequence seq = new CaptureSequence {
                         ExposureTime = _settingsManager.ExposureTime, ImageType = "LIGHT", Gain = _settingsManager.Gain,
-                        Binning = new BinningMode((short)binVal, (short)binVal), FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                        Binning = new BinningMode((short)binVal, (short)binVal), FilterType = GetTargetFilterInfo(),
                         Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
                     };
 
@@ -678,7 +678,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
             CaptureSequence seq = new CaptureSequence {
                 ExposureTime = _settingsManager.ExposureTime, ImageType = "LIGHT", Gain = _settingsManager.Gain,
-                Binning = new BinningMode((short)binVal, (short)binVal), FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                Binning = new BinningMode((short)binVal, (short)binVal), FilterType = GetTargetFilterInfo(),
                 Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
             };
             
@@ -987,7 +987,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 ImageType = "LIGHT",
                 Gain = _settingsManager.Gain,
                 Binning = new BinningMode((short)binVal, (short)binVal),
-                FilterType = new FilterInfo { Name = _settingsManager.Filter },
+                FilterType = GetTargetFilterInfo(),
                 Offset = _settingsManager.Offset,
                 Enabled = true,
                 TotalExposureCount = 1
@@ -1080,6 +1080,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 }
                 await Task.Delay(1000, rescueToken);
             }
+        }
+
+        private FilterInfo GetTargetFilterInfo() {
+            if (string.IsNullOrEmpty(_settingsManager.Filter) || _settingsManager.Filter == "(Current)") {
+                return new FilterInfo { Name = "(Current)" };
+            }
+            int pos = ResolveFilterPosition(_settingsManager.Filter);
+            return new FilterInfo { Name = _settingsManager.Filter, Position = (short)pos };
         }
 
         private int ResolveFilterPosition(string filterName) {

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.2.0 — Filter Wheel Resolver & Position Hardening (2026-07-22)
+
+### 🐛 Bug Fixes & Stability
+- **Fixed Filter Wheel Position Resolver**: Resolved a bug where constructing `CaptureSequence` objects without explicitly populating `FilterType.Position` caused `Position` to default to 0. This previously led N.I.N.A.'s internal `CaptureSolver` to issue unwanted filter change requests (e.g. switching back and forth between Position 1 and Position 0) on every exposure for both manual and electronic filter wheels.
+- **Synchronized CaptureSequence Filter State**: Enforced exact filter position mapping (`GetTargetFilterInfo`) across all workflow phases (initial positioning, rotation, measurement, and rescue solver loops).
+
+---
+
 ## v1.5.1.0 — Sequencer Measurement Only & Error Display (2026-07-19)
 
 ### 🤖 Sequencer Enhancements
