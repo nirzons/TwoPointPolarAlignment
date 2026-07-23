@@ -1048,7 +1048,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 IsRunningFromSequence = IsRunningFromSequence,
                 SequenceResumeTcs = RunningSequenceItem?.ResumeTcs,
                 MeasureOnly = RunningSequenceItem?.MeasureOnly ?? false,
-                ForceHomePosition = RunningSequenceItem?.ForceHomePosition ?? true
+                ForceHomePosition = RunningSequenceItem?.ForceHomePosition ?? false
             };
             
             // Clear lastStoppedCoordinates and lastStoppedDirection so they only apply to the immediately following start command

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.3.0 — Filter Current Resolver & Sequencer-Only Homing Fix (2026-07-23)
+
+### 🐛 Bug Fixes & Stability
+- **Fixed `(Current)` Filter Resolver**: Resolved an issue where selecting `(Current)` filter in settings returned a `FilterInfo` object with uninitialized `Position` (defaulting to 0). The plugin now dynamically queries the connected filter wheel for its active `SelectedFilter`, preventing N.I.N.A.'s capture engine from issuing unwanted filter change commands on every exposure attempt.
+- **Scoped `ForceHomePosition` to Advanced Sequencer**: Fixed an issue where the `ForceHomePosition` feature added in v1.5.1.0 defaulted to active when running manually from the Imaging tab GUI button, causing the mount to auto-home unexpectedly. `ForceHomePosition` is now strictly active only when executing within an Advanced Sequencer block.
+
+---
+
 ## v1.5.2.0 — Filter Wheel Resolver & Position Hardening (2026-07-22)
 
 ### 🐛 Bug Fixes & Stability

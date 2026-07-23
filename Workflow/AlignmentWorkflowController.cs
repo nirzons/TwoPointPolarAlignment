@@ -187,7 +187,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         progress.Report(new AlignmentProgressReport { IsReversedFlowActive = isReversed });
                     }
                     else {
-                        if (context.ForceHomePosition) {
+                        if (context.IsRunningFromSequence && context.ForceHomePosition) {
                             if (_settingsManager.OverrideMountHome) {
                                 Coordinates polarHomeCoords = new Coordinates(_settingsManager.PolarHomeRA, _settingsManager.PolarHomeDec, Epoch.J2000, Coordinates.RAType.Hours);
                                 ReportLog(progress, $"[Force Home Position] Slewing mount to Custom Polar Home (RA: {polarHomeCoords.RA:F2}h, Dec: {polarHomeCoords.Dec:F2}°)...");
@@ -1084,7 +1084,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
 
         private FilterInfo GetTargetFilterInfo() {
             if (string.IsNullOrEmpty(_settingsManager.Filter) || _settingsManager.Filter == "(Current)") {
-                return new FilterInfo { Name = "(Current)" };
+                if (_filterWheelMediator?.GetInfo()?.Connected ?? false) {
+                    var current = _filterWheelMediator.GetInfo()?.SelectedFilter;
+                    if (current != null) {
+                        return current;
+                    }
+                }
+                return null;
             }
             int pos = ResolveFilterPosition(_settingsManager.Filter);
             return new FilterInfo { Name = _settingsManager.Filter, Position = (short)pos };
