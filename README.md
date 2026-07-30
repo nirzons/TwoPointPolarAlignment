@@ -43,6 +43,7 @@ Please refer to the comprehensive **[User & Operation Manual](USER_MANUAL.md)** 
 
 ## ✨ Key Features
 
+- **Dynamic Plate-Solving Camera Settings (`(Current)`)**: First-time installs and new sequence blocks default Exposure Time, Gain, Offset, and Binning to `(Current)`, dynamically inheriting parameters from your active N.I.N.A profile's **Options $\rightarrow$ Plate Solving** settings (`PlateSolveSettings`).
 - **Two-Point Simplicity**: No specialized view required. Aligns accurately starting from your mount's natural home position with a single 90-degree RA rotation.
 - **Advanced Sequencer Integration**: Run polar alignment fully automatically as part of your N.I.N.A. Advanced Sequencer workflows. Exposes all configuration options as overrides, displays warning badges when equipment is disconnected, and automatically pauses at Phase F adjustments (showing a purple `[Resume Sequence]` button) until manual tweaks are confirmed.
 - **Multi-Frame Sampling & Outlier Rejection**: Capture Single, Double, or Triple sub-frames at each measurement station to average out seeing jitter and wind gusts. Uses 3D unit-vector spherical geometry to automatically reject coordinate outliers on triple exposures.

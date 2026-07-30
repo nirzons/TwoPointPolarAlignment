@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.4.0 — Dynamic Plate Solving Defaults & Telemetry Hardening (2026-07-30)
+
+### 🚀 New Features & Enhancements
+- **Dynamic Camera Settings Fallback (`(Current)`)**:
+  - Allows leaving Exposure Time, Gain, or Offset textboxes empty (`""`) to select `(Current)`.
+  - First-time plugin installations and newly created sequence items default Exposure Time, Gain, Offset, and Binning to `(Current)` automatically out of the box.
+  - Built custom WPF `NullableNumberToStringConverter` to eliminate WPF red validation error borders (`!`) when clearing numeric input fields.
+  - Added `(Current)` choice to `Binning` dropdown selector.
+  - Dynamically inherits Exposure Time, Gain, and Binning directly from N.I.N.A's active **Options $\rightarrow$ Plate Solving** profile configuration (`PlateSolveSettings`) when set to `(Current)`.
+  - Dynamically inherits Offset from active connected camera hardware.
+- **Sequencer Item Polish**:
+  - Added dynamic rating color coding to **Total Error** in the Advanced Sequencer block view (`#00FF7F` Spring Green for $\le 1'$, `#98FB98` Light Green for $\le 3'$, `#FFD700` Gold for $\le 10'$, `#FF4D4D` Red for $>10'$).
+  - Added `Filters` property to `TwoPointPolarAlignmentSequenceItem`, restoring full active profile filter dropdown choices in the Advanced Sequencer block view.
+  - Added in-flight operation polling guard to sequence item execution, preventing sequencer hangs when starting sequences while mount homing is in flight.
+  - Changed **Rough Finder Rescue Mode** in new Advanced Sequencer blocks to be **OFF by default**.
+- **Transparent Parameter Logging**:
+  - Logs exact resolved exposure time, gain, offset, and binning values for every capture cycle to N.I.N.A.'s log file (`[2-Point Polar Alignment] Resolved Capture Parameters: Exposure=4s, Gain=300, Offset=0, Binning=3x3`).
+
+### 🐛 Bug Fixes & Stability
+- **Fixed Sequencer `(Current)` Override Resolution**: Resolved an issue where specifying `(Current)` for Exposure Time, Gain, or Offset in an Advanced Sequencer block would fall back to custom values typed into the GUI tab rather than inheriting from N.I.N.A.'s active **Options $\rightarrow$ Plate Solving** profile (`PlateSolveSettings`) or camera hardware defaults.
+- **Clean Sequence Loading (Excluded Transient Error Display from JSON)**: Excluded `CurrentErrorDisplay` and `CurrentErrorColorHex` from sequence JSON serialization. Saved sequence templates and targets now load cleanly with default label and `"--"` error display without preserving stale measurement results from previous runs.
+
+---
+
 ## v1.5.3.0 — Filter Current Resolver & Sequencer-Only Homing Fix (2026-07-23)
 
 ### 🐛 Bug Fixes & Stability

@@ -338,12 +338,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set => _settingsManager.StartingPoint = value;
         }
 
-        public double ExposureTime {
+        public double? ExposureTime {
             get => _settingsManager.ExposureTime;
             set => _settingsManager.ExposureTime = value;
         }
 
-        public int Gain {
+        public int? Gain {
             get => _settingsManager.Gain;
             set => _settingsManager.Gain = value;
         }
@@ -393,7 +393,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set => _settingsManager.Binning = value;
         }
 
-        public int Offset {
+        public int? Offset {
             get => _settingsManager.Offset;
             set => _settingsManager.Offset = value;
         }
@@ -484,6 +484,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 RaisePropertyChanged(nameof(IsPreviousAlignmentDimmed));
             }
         }
+
 
         public string StatusIndicatorText {
             get => statusIndicatorText;
@@ -875,10 +876,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     IsPreviousAlignmentDimmed = false;
                 }
                 if (report.AzimuthError != null) AzimuthError = report.AzimuthError;
+
                 if (report.TotalError != null) {
                     TotalError = report.TotalError;
                     if (RunningSequenceItem != null) {
                         RunningSequenceItem.CurrentErrorDisplay = report.TotalError;
+                        if (report.TotalErrorRatingColorHex != null) {
+                            RunningSequenceItem.CurrentErrorColorHex = report.TotalErrorRatingColorHex;
+                        }
                     }
                 }
                 

@@ -110,9 +110,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             return Issues.Count == 0;
         }
 
-        private double exposureTime = 2.0;
+        private double? exposureTime = null;
         [JsonProperty]
-        public double ExposureTime {
+        public double? ExposureTime {
             get => exposureTime;
             set {
                 if (exposureTime != value) {
@@ -122,9 +122,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
-        private int gain = 0;
+        private int? gain = null;
         [JsonProperty]
-        public int Gain {
+        public int? Gain {
             get => gain;
             set {
                 if (gain != value) {
@@ -157,6 +157,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
             }
         }
+
+        public IEnumerable<string> Filters => (PolarAlignmentDockableVM ?? PolarAlignmentDockableVM.Instance)?.Filters ?? new List<string> { "(Current)", "Luminance", "Red", "Green", "Blue", "Ha", "OIII", "SII" };
 
         private RotationMethod method = RotationMethod.Automatic;
         [JsonProperty]
@@ -194,7 +196,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
-        private string binning = "1x1";
+        private string binning = "(Current)";
         [JsonProperty]
         public string Binning {
             get => binning;
@@ -206,9 +208,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
-        private int offset = 0;
+        private int? offset = null;
         [JsonProperty]
-        public int Offset {
+        public int? Offset {
             get => offset;
             set {
                 if (offset != value) {
@@ -230,7 +232,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
-        private bool enableOnePointAlignment = true;
+        private bool enableOnePointAlignment = false;
         [JsonProperty]
         public bool EnableOnePointAlignment {
             get => enableOnePointAlignment;
@@ -323,7 +325,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         }
 
         private string currentErrorDisplay = "--";
-        [JsonProperty]
         public string CurrentErrorDisplay {
             get => currentErrorDisplay;
             set {
@@ -340,6 +341,18 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 }
             }
         }
+
+        private string currentErrorColorHex = "#FFFFFF";
+        public string CurrentErrorColorHex {
+            get => currentErrorColorHex;
+            set {
+                if (currentErrorColorHex != value) {
+                    currentErrorColorHex = value;
+                    RaisePropertyChanged(nameof(CurrentErrorColorHex));
+                }
+            }
+        }
+
 
         public bool IsAutoCompleteAllowed => !MeasureOnly;
 
@@ -404,17 +417,30 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                                 EnableOnePointAlignment,
                                 ExposuresPerPoint
                             );
-
-                            // Automatically launch the alignment run!
-                            if (vm.CanStart) {
-                                vm.StartAlignment();
-                            }
                         });
 
-                        // Report status progress to N.I.N.A. sequencer
-                        progress.Report(new global::NINA.Core.Model.ApplicationStatus { 
-                            Status = $"2-Point Polar Alignment: Pass {currentPass}/{totalPasses} starting..." 
+                        // Wait for any background operations (e.g., manual GUI homing or previous run cleanup) to complete
+                        while (!vm.CanStart && !token.IsCancellationRequested) {
+                            await Task.Delay(200, token);
+                        }
+                        token.ThrowIfCancellationRequested();
+
+                        // Automatically launch the alignment run!
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                            vm.StartAlignment();
                         });
+
+                        // Verify that alignment workflow successfully started
+                        await Task.Delay(300, token);
+                        if (!vm.IsRunning && !token.IsCancellationRequested) {
+                            throw new InvalidOperationException("Failed to launch 2-Point Polar Alignment workflow. Please check equipment connection status.");
+                        }
+                    }
+
+                    // Report status progress to N.I.N.A. sequencer
+                    progress.Report(new global::NINA.Core.Model.ApplicationStatus { 
+                        Status = $"2-Point Polar Alignment: Pass {currentPass}/{totalPasses} starting..." 
+                    });
 
                         try {
                             await resumeTcs.Task;
@@ -423,7 +449,6 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                             token.ThrowIfCancellationRequested();
                             throw;
                         }
-                    }
 
                     if (remainingRetries <= 0) {
                         break;

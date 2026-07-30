@@ -1,5 +1,5 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: v1.5.3.0*
+*Applicable Version: v1.5.4.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
@@ -55,33 +55,35 @@ If you need to install the plugin manually (e.g., from a custom compiled release
 
 ---
 
-### 2. Configuration Settings
+### 2. Configuration Settings & `(Current)` Defaults
+
 Before starting, adjust these core parameters in the plugin interface:
 
 | Parameter | Recommended Value | Description |
 | :--- | :--- | :--- |
-| **Exposure (s)** | `2.0` to `5.0` seconds | Long enough to capture a high star count for reliable plate solving. |
-| **Gain** | Standard Capture Gain | Match your standard DSO imaging gain. |
-| **Binning** | `1x1` or `2x2` | `2x2` is recommended to speed up downloads and improve solver performance. |
+| **Exposure (s)** | `(Current)` or `2.0` - `5.0`s | Leave empty (`""`) to display `(Current)`. Automatically inherits your active N.I.N.A **Options -> Plate Solving** exposure time setting. |
+| **Gain** | `(Current)` or DSO Gain | Leave empty (`""`) to display `(Current)`. Automatically inherits your active N.I.N.A **Options -> Plate Solving** gain (or active camera hardware gain). |
+| **Binning** | `(Current)` or `1x1` / `2x2` | Select `(Current)` to automatically inherit your N.I.N.A **Options -> Plate Solving** binning setting. |
 | **Rotation Amount (°)** | `90.0°` (Default) | The total RA axis rotation. Can be decreased if physical limits require it. |
 | **Direction** | `East` or `West` | Select based on telescope clearance relative to the meridian or tripod legs. |
 | **Rotation Method** | `Automatic` | **Automatic** commands the mount to slew automatically. Choose **Manual** for push-to trackers. |
 | **Starting Point** | `Start at Home` | Defines the sequence start. `Pre-rotate Half Range` moves the mount RA by `-45°` before taking the first shot. |
 | **Filter** | `(Current)` | Wide-band filter (like Luminance/L) to maximize star count, or `(Current)` to use the active slot. |
-| **Offset** | `0` | The camera offset parameter to use during exposure capture. |
+| **Offset** | `(Current)` or `0` | Leave empty (`""`) to display `(Current)`. Automatically inherits your active connected camera hardware offset. |
 | **Plate Solve Retries**| `5` | Recommended number of plate solving retry attempts before raising a solve failure warning. |
 | **Exposures Per Point**| `1`, `2`, or `3` | Multi-frame averaging. Captures up to 3 exposures at each station to average out seeing jitter and wind gusts. Uses unit-vector based outlier rejection. |
-| **Rough Finder** | `Enabled` | **Highly recommended!** Automatically activates a backup Blind Solving rescue if your initial deployment error is large. |
+| **Rough Finder** | `Disabled` (Default) | Automatically activates a backup Blind Solving rescue if your initial deployment error is large. OFF by default in sequencer items. |
 | **Alt Knob Visual** | `Standard` | Map Altitude instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols. |
 | **Azimuth Knob Visual**| `Standard` | Map Azimuth instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols (perfect for single-knob AM5 mounts). |
 | **Override Mount Home**| `False` | Set to `True` to unlock custom celestial home position starting parameters (described in detail below). |
 | **Lock Polar Home** | Action Button | Press to save the mount's active RA/Dec coordinates persistently in your active profile. |
 
+
 ---
 
 > [!NOTE]
-> **Filter Configuration & Profile Synchronization**:
-> The list of filters displayed in the dropdown is loaded from your active N.I.N.A. profile (configured in N.I.N.A. under Options -> Equipment -> Filter Wheel). If you edit, rename, or add filter names there, you **must restart N.I.N.A.** for the updated list to be populated in the plugin's interface. If no filters are defined in your active profile, the plugin will fallback to a default list (`Luminance`, `Red`, `Green`, `Blue`, `Ha`, `OIII`, `SII`).
+> **Dynamic Plate Solving Integration & Clean UI**:
+> Because 2-Point Polar Alignment performs plate solving, setting **Exposure (s)**, **Gain**, or **Binning** to `(Current)` dynamically pulls your exact parameters from N.I.N.A.'s **Options -> Plate Solving** configuration. Clearing any numeric input field cleanly formats `(Current)` without triggering WPF red validation error outlines (`!`).
 
 ---
 

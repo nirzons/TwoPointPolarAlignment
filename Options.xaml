@@ -4,7 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
     xmlns:local="clr-namespace:NirZonshine.NINA.TwoPointPolarAlignment"
+    xmlns:converters="clr-namespace:NirZonshine.NINA.TwoPointPolarAlignment.Converters"
     xmlns:nina="clr-namespace:NINA.View.Sequencer;assembly=NINA.Sequencer">
+
+    <converters:NullableNumberToStringConverter x:Key="NullableNumberConverter" />
 
     <!-- Object Data Providers for Enums -->
     <ObjectDataProvider x:Key="RotationMethodValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
@@ -45,6 +48,7 @@
 
     <!-- Static Arrays for Binning and Filters -->
     <x:Array x:Key="BinningValues" Type="{x:Type sys:String}">
+        <sys:String>(Current)</sys:String>
         <sys:String>1x1</sys:String>
         <sys:String>2x2</sys:String>
         <sys:String>3x3</sys:String>
@@ -267,7 +271,7 @@
                                                         <Setter TargetName="buttonBorder" Property="Background" Value="#353540"/>
                                                         <Setter TargetName="content" Property="Opacity" Value="0.5"/>
                                                         <Setter Property="Cursor" Value="Arrow"/>
-                                                    </Trigger>
+                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
                                         </Setter.Value>
@@ -342,8 +346,15 @@
                             </Button>
                         </Grid>
 
-                        <!-- 2. Config Header -->
-                        <TextBlock Grid.Row="1" Text="Alignment Settings" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" Margin="0,0,0,8" />
+                        <!-- 2. Config Header & Prominent Estimated Cone Error -->
+                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Alignment Settings" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" />
+                            <TextBlock Grid.Column="1" Text="{Binding EstimatedConeErrorText}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MahApps.Brushes.Accent}" HorizontalAlignment="Right" Margin="0,0,4,0" />
+                        </Grid>
 
                         <!-- 3. Inputs Grid -->
                         <Grid Grid.Row="2" Margin="0,0,0,8" IsEnabled="{Binding CanEditSettings}">
@@ -364,13 +375,13 @@
                             <!-- Exposure Time -->
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Exposure (s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding ExposureTime, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                                <TextBox Text="{Binding ExposureTime, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera exposure time from Imaging tab." />
                             </StackPanel>
 
                             <!-- Gain -->
                             <StackPanel Grid.Row="0" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Gain" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding Gain, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                                <TextBox Text="{Binding Gain, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera gain from Imaging tab." />
                             </StackPanel>
 
                             <!-- Binning Selection -->
@@ -412,7 +423,7 @@
                             <!-- Offset -->
                             <StackPanel Grid.Row="2" Grid.Column="2" Margin="4,0,0,6">
                                 <TextBlock Text="Offset" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding Offset, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                                <TextBox Text="{Binding Offset, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera offset from Imaging tab." />
                             </StackPanel>
 
                             <!-- Plate Solve Retries -->
@@ -596,32 +607,32 @@
                         <!-- Exposure -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Exposure Time" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding ExposureTime, UpdateSourceTrigger=PropertyChanged}" Width="45" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding ExposureTime, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                             <TextBlock Text="s" VerticalAlignment="Center" Margin="2,0,0,0" />
                         </StackPanel>
 
                         <!-- Gain -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Gain" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding Gain, UpdateSourceTrigger=PropertyChanged}" Width="45" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding Gain, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
 
                         <!-- Binning -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Binning" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <ComboBox ItemsSource="{Binding Source={StaticResource BinningValues}}" SelectedItem="{Binding Binning}" Width="65" Height="22" VerticalContentAlignment="Center" />
+                            <ComboBox ItemsSource="{Binding Source={StaticResource BinningValues}}" SelectedItem="{Binding Binning}" Width="75" Height="22" VerticalContentAlignment="Center" />
                         </StackPanel>
 
                         <!-- Offset -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Offset" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding Offset, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding Offset, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
 
                         <!-- Filter -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Filter" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <ComboBox ItemsSource="{Binding Source={x:Static local:PolarAlignmentDockableVM.Instance}, Path=Filters}" SelectedItem="{Binding Filter}" Width="80" Height="22" VerticalContentAlignment="Center" />
+                            <ComboBox ItemsSource="{Binding Filters}" SelectedItem="{Binding Filter}" Width="90" Height="22" VerticalContentAlignment="Center" />
                         </StackPanel>
                     </WrapPanel>
 
@@ -630,13 +641,13 @@
                         <!-- Method -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Method" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <ComboBox ItemsSource="{Binding Source={StaticResource RotationMethodValues}}" SelectedItem="{Binding Method}" Width="95" Height="22" VerticalContentAlignment="Center" />
+                            <ComboBox ItemsSource="{Binding Source={StaticResource RotationMethodValues}}" SelectedItem="{Binding Method}" Width="90" Height="22" VerticalContentAlignment="Center" />
                         </StackPanel>
 
                         <!-- Starting Point -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Starting Point" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <ComboBox ItemsSource="{Binding Source={StaticResource StartingPointModeValues}}" SelectedItem="{Binding StartingPoint}" Width="150" Height="22" VerticalContentAlignment="Center" />
+                            <ComboBox ItemsSource="{Binding Source={StaticResource StartingPointModeValues}}" SelectedItem="{Binding StartingPoint}" Width="140" Height="22" VerticalContentAlignment="Center" />
                         </StackPanel>
 
                         <!-- Rotation Amount -->
@@ -711,9 +722,12 @@
             </nina:SequenceBlockView.SequenceItemContent>
 
             <nina:SequenceBlockView.SequenceItemProgressContent>
-                <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <TextBlock Text="Total Error" HorizontalAlignment="Right" Opacity="0.6" FontSize="10" />
-                    <TextBlock Text="{Binding CurrentErrorDisplay}" HorizontalAlignment="Right" FontWeight="Bold" FontSize="13" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <!-- Total Error -->
+                    <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                        <TextBlock Text="Total Error" HorizontalAlignment="Right" Opacity="0.6" FontSize="10" />
+                        <TextBlock Text="{Binding CurrentErrorDisplay}" Foreground="{Binding CurrentErrorColorHex}" HorizontalAlignment="Right" FontWeight="Bold" FontSize="13" />
+                    </StackPanel>
                 </StackPanel>
             </nina:SequenceBlockView.SequenceItemProgressContent>
         </nina:SequenceBlockView>

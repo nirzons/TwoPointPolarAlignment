@@ -353,25 +353,34 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             int exposuresCount = (int)_settingsManager.ExposuresPerPoint;
             var successfulSolves = new List<SubframeSolveInfo>();
             
-            int binVal = 1;
-            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) {
-                int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            var profile = _profileService?.ActiveProfile;
+            var plateSolveSettings = profile?.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+
+            int binVal = ResolveBinning(plateSolveSettings);
+            double expTime = ResolveExposureTime(plateSolveSettings);
+            int gainVal = ResolveGain(plateSolveSettings);
+
+            int offsetVal = _settingsManager.Offset ?? -1;
+            if (offsetVal < 0) {
+                var camInfo = _cameraMediator.GetInfo();
+                offsetVal = (camInfo != null && camInfo.Connected) ? camInfo.Offset : 0;
+                if (offsetVal < 0) offsetVal = 0;
             }
 
             CaptureSequence sequence = new CaptureSequence {
-                ExposureTime = _settingsManager.ExposureTime,
+                ExposureTime = expTime,
                 ImageType = "LIGHT",
-                Gain = _settingsManager.Gain,
+                Gain = gainVal,
                 Binning = new BinningMode((short)binVal, (short)binVal),
                 FilterType = GetTargetFilterInfo(),
-                Offset = _settingsManager.Offset,
+                Offset = offsetVal,
                 Enabled = true,
                 TotalExposureCount = 1
             };
 
-            var profile = _profileService.ActiveProfile;
-            var plateSolveSettings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
-            if (plateSolveSettings == null && !context.IsSimulation) throw new InvalidOperationException("Could not retrieve active plate solve settings.");
+            global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] Resolved Capture Parameters: Exposure={expTime}s, Gain={gainVal}, Offset={offsetVal}, Binning={binVal}x{binVal}");
+
+
 
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
@@ -617,12 +626,14 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(ps);
                     ICaptureSolver capSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
                     
-                    int binVal = 1;
-                    if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+                    int binVal = ResolveBinning(ps);
+                    double rotExp = ResolveExposureTime(ps);
+                    int rotGain = ResolveGain(ps);
+                    int rotOffset = (_settingsManager.Offset.HasValue && _settingsManager.Offset.Value >= 0) ? _settingsManager.Offset.Value : ((_cameraMediator.GetInfo()?.Connected ?? false) ? Math.Max(0, _cameraMediator.GetInfo().Offset) : 0);
                     CaptureSequence seq = new CaptureSequence {
-                        ExposureTime = _settingsManager.ExposureTime, ImageType = "LIGHT", Gain = _settingsManager.Gain,
+                        ExposureTime = rotExp, ImageType = "LIGHT", Gain = rotGain,
                         Binning = new BinningMode((short)binVal, (short)binVal), FilterType = GetTargetFilterInfo(),
-                        Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
+                        Offset = rotOffset, Enabled = true, TotalExposureCount = 1
                     };
 
                     await OnManualRotationRequested(context, _settingsManager.RotationAmount, context.ActiveDirection, context.Coordinates1, seq, capSolver, context.IsSimulation);
@@ -674,16 +685,19 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 return;
             }
 
-            int binVal = 1;
-            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            var profile = _profileService?.ActiveProfile;
+            var plateSolveSettings = profile?.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+
+            int binVal = ResolveBinning(plateSolveSettings);
+            double liveExp = ResolveExposureTime(plateSolveSettings);
+            int liveGain = ResolveGain(plateSolveSettings);
+            int liveOffset = (_settingsManager.Offset.HasValue && _settingsManager.Offset.Value >= 0) ? _settingsManager.Offset.Value : ((_cameraMediator.GetInfo()?.Connected ?? false) ? Math.Max(0, _cameraMediator.GetInfo().Offset) : 0);
             CaptureSequence seq = new CaptureSequence {
-                ExposureTime = _settingsManager.ExposureTime, ImageType = "LIGHT", Gain = _settingsManager.Gain,
+                ExposureTime = liveExp, ImageType = "LIGHT", Gain = liveGain,
                 Binning = new BinningMode((short)binVal, (short)binVal), FilterType = GetTargetFilterInfo(),
-                Offset = _settingsManager.Offset, Enabled = true, TotalExposureCount = 1
+                Offset = liveOffset, Enabled = true, TotalExposureCount = 1
             };
             
-            var profile = _profileService.ActiveProfile;
-            var plateSolveSettings = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
 
@@ -782,7 +796,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 IsAzimuthPriority = total >= 0.5 && Math.Abs(azErr) > Math.Abs(altErr) + 0.1
             };
 
-            global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] Calculated Alignment Errors: Alt {report.AltitudeError}, Az {report.AzimuthError} (Alt: {altErr:F1}', Az: {azErr:F1}'), Total: {report.TotalError} ({total:F1}')");
+            global::NINA.Core.Utility.Logger.Info($"[2-Point Polar Alignment] Calculated Alignment Errors: Alt {report.AltitudeError}, Az {report.AzimuthError} (Total: {report.TotalError})");
 
             if (_settingsManager.AzKnobDirection == AzimuthKnobDirection.LeftRightArrow) {
                 if (azErr > 0) report.AzimuthInstruction = "← Move Left";
@@ -977,24 +991,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             ReportLog(progress, "Initializing Rough Finder Rescue Engine Loop...");
             Notification.ShowSuccess("Rough Finder Rescue Engaged. Watch live telemetry to reach center target zone.");
             
-            int binVal = 1;
-            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning.Length >= 1) {
-                int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
-            }
+            var profile = _profileService?.ActiveProfile;
+            var ps = profile?.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
+
+            int binVal = ResolveBinning(ps);
+            double trackExp = ResolveExposureTime(ps);
+            int trackGain = ResolveGain(ps);
+            int trackOffset = (_settingsManager.Offset.HasValue && _settingsManager.Offset.Value >= 0) ? _settingsManager.Offset.Value : ((_cameraMediator.GetInfo()?.Connected ?? false) ? Math.Max(0, _cameraMediator.GetInfo().Offset) : 0);
 
             CaptureSequence seq = new CaptureSequence {
-                ExposureTime = _settingsManager.ExposureTime,
+                ExposureTime = trackExp,
                 ImageType = "LIGHT",
-                Gain = _settingsManager.Gain,
+                Gain = trackGain,
                 Binning = new BinningMode((short)binVal, (short)binVal),
                 FilterType = GetTargetFilterInfo(),
-                Offset = _settingsManager.Offset,
+                Offset = trackOffset,
                 Enabled = true,
                 TotalExposureCount = 1
             };
             
-            var profile = _profileService.ActiveProfile;
-            var ps = profile.GetType().GetProperty("PlateSolveSettings")?.GetValue(profile) as IPlateSolveSettings;
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(ps);
             IPlateSolver blindSolver = context.IsSimulation ? null : _plateSolverFactory.GetBlindSolver(ps);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, blindSolver, _imagingMediator, _filterWheelMediator);
@@ -1170,6 +1185,49 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             }
 
             return 0;
+        }
+
+        private double ResolveExposureTime(IPlateSolveSettings plateSolveSettings = null) {
+            double expTime = _settingsManager.ExposureTime ?? 0.0;
+            if (expTime <= 0) {
+                plateSolveSettings ??= _profileService?.ActiveProfile?.GetType().GetProperty("PlateSolveSettings")?.GetValue(_profileService.ActiveProfile) as IPlateSolveSettings;
+                if (plateSolveSettings != null && plateSolveSettings.ExposureTime > 0) {
+                    expTime = plateSolveSettings.ExposureTime;
+                } else {
+                    expTime = 2.0;
+                }
+            }
+            return expTime;
+        }
+
+        private int ResolveGain(IPlateSolveSettings plateSolveSettings = null) {
+            int gainVal = _settingsManager.Gain ?? -1;
+            if (gainVal < 0) {
+                plateSolveSettings ??= _profileService?.ActiveProfile?.GetType().GetProperty("PlateSolveSettings")?.GetValue(_profileService.ActiveProfile) as IPlateSolveSettings;
+                if (plateSolveSettings != null && plateSolveSettings.Gain >= 0) {
+                    gainVal = plateSolveSettings.Gain;
+                } else {
+                    var camInfo = _cameraMediator.GetInfo();
+                    gainVal = (camInfo != null && camInfo.Connected) ? camInfo.Gain : 0;
+                    if (gainVal < 0) gainVal = 0;
+                }
+            }
+            return gainVal;
+        }
+
+        private int ResolveBinning(IPlateSolveSettings plateSolveSettings = null) {
+            int binVal = 1;
+            if (!string.IsNullOrEmpty(_settingsManager.Binning) && _settingsManager.Binning != "(Current)" && _settingsManager.Binning.Length >= 1) {
+                int.TryParse(_settingsManager.Binning.Substring(0, 1), out binVal);
+            } else {
+                plateSolveSettings ??= _profileService?.ActiveProfile?.GetType().GetProperty("PlateSolveSettings")?.GetValue(_profileService.ActiveProfile) as IPlateSolveSettings;
+                if (plateSolveSettings != null && plateSolveSettings.Binning > 0) {
+                    binVal = (int)plateSolveSettings.Binning;
+                } else {
+                    binVal = 1;
+                }
+            }
+            return binVal;
         }
 
     }
