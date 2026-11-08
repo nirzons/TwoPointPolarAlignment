@@ -12,6 +12,7 @@ using NINA.Core.Utility.Notification;
 using NINA.PlateSolving;
 using NINA.PlateSolving.Interfaces;
 using NINA.Astrometry;
+using NINA.Core.Enum;
 using NINA.Core.Model;
 using System.Threading;
 using System.Threading.Tasks;
@@ -584,18 +585,22 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         public void StopAlignment() {
             if (IsRunning) {
                 Log("Stop requested by user. Aborting alignment sequence...");
-                try {
-                    alignmentCts?.Cancel();
-                } catch { }
                 IsRunning = false;
                 try {
-                    if (telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                    var info = telescopeMediator?.GetInfo();
+                    if (info?.Connected == true) {
+                        if (info.CanMovePrimaryAxis) {
+                            try { telescopeMediator.MoveAxis(TelescopeAxes.Primary, 0.0); } catch { }
+                        }
                         telescopeMediator.StopSlew();
                         Log("Mount slew stopped immediately.");
                     }
                 } catch (Exception ex) {
                     global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] StopSlew failed: {ex.Message}");
                 }
+                try {
+                    alignmentCts?.Cancel();
+                } catch { }
             }
         }
 
@@ -605,6 +610,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
         });
 
         public void HomeAlignment() {
+            lastStoppedCoordinates = null;
+            lastStoppedDirection = null;
             if (IsRunning) {
                 requestedHome = true;
                 StopAlignment();
@@ -670,6 +677,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                     } catch (Exception ex) {
                         Log($"[Error] Failed to complete Home directive: {ex.Message}");
                     } finally {
+                        lastStoppedCoordinates = null;
+                        lastStoppedDirection = null;
                         SetStatus("Ready to Start", StatusIdleColor);
                         Interlocked.Exchange(ref _taskExecutingFlag, 0);
                         RaisePropertyChanged(nameof(CanStart));
@@ -934,37 +943,62 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 } catch (OperationCanceledException) {
                     Log("Alignment sequence successfully aborted.");
                     Notification.ShowSuccess("2-Point Polar Alignment: Sequence aborted successfully!");
-                    try {
-                        if (telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
-                            var pos = telescopeMediator.GetCurrentPosition();
-                            if (pos != null) {
-                                lastStoppedCoordinates = pos;
-                                lastStoppedDirection = IsReversedFlowActive ? 
-                                    (Direction == RotationDirection.East ? RotationDirection.West : RotationDirection.East) : 
-                                    Direction;
-                                Log($"[Smart Restart] Saved last stopped position: RA {pos.RA:F2}h, Dec {pos.Dec:F2}° (Direction: {lastStoppedDirection})");
+                    if (!requestedHome) {
+                        try {
+                            if (telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                                var pos = telescopeMediator.GetCurrentPosition();
+                                if (pos != null) {
+                                    lastStoppedCoordinates = pos;
+                                    lastStoppedDirection = IsReversedFlowActive ? 
+                                        (Direction == RotationDirection.East ? RotationDirection.West : RotationDirection.East) : 
+                                        Direction;
+                                    Log($"[Smart Restart] Saved last stopped position: RA {pos.RA:F2}h, Dec {pos.Dec:F2}° (Direction: {lastStoppedDirection})");
+                                }
                             }
-                        }
-                    } catch { }
+                        } catch { }
+                    }
                 } catch (Exception ex) {
                     Log($"[Error] Alignment failed: {ex.Message}");
                     Notification.ShowError($"Alignment failed: {ex.Message}");
                 } finally {
                     bool triggerHome = requestedHome;
                     requestedHome = false;
-                    
-                    try {
-                        if (lastStoppedCoordinates == null && telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
-                            var pos = telescopeMediator.GetCurrentPosition();
-                            if (pos != null) {
-                                lastStoppedCoordinates = pos;
-                                lastStoppedDirection = IsReversedFlowActive ? 
-                                    (Direction == RotationDirection.East ? RotationDirection.West : RotationDirection.East) : 
-                                    Direction;
-                                Log($"[Smart Restart] Saved last stopped position: RA {pos.RA:F2}h, Dec {pos.Dec:F2}° (Direction: {lastStoppedDirection})");
-                            }
+
+                    int settlePolls = 0;
+                    if (!triggerHome && telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                        while (telescopeMediator.GetInfo()?.Slewing == true && settlePolls < 15) {
+                            await Task.Delay(200);
+                            settlePolls++;
                         }
-                    } catch { }
+                    }
+                    
+                    if (!triggerHome) {
+                        try {
+                            if ((lastStoppedCoordinates == null || settlePolls > 0) && telescopeMediator != null && telescopeMediator.GetInfo()?.Connected == true) {
+                                var pos = telescopeMediator.GetCurrentPosition();
+                                if (pos != null) {
+                                    lastStoppedCoordinates = pos;
+                                    lastStoppedDirection = IsReversedFlowActive ? 
+                                        (Direction == RotationDirection.East ? RotationDirection.West : RotationDirection.East) : 
+                                        Direction;
+                                    Log($"[Smart Restart] Saved last stopped position: RA {pos.RA:F2}h, Dec {pos.Dec:F2}° (Direction: {lastStoppedDirection})");
+                                }
+                            }
+                        } catch { }
+                    }
+
+                    if (!triggerHome) {
+                        try {
+                            var mountInfo = telescopeMediator?.GetInfo();
+                            if (mountInfo != null && mountInfo.Connected && mountInfo.CanSetTrackingEnabled) {
+                                try { telescopeMediator.SetTrackingMode(global::NINA.Equipment.Interfaces.TrackingMode.Sidereal); } catch { }
+                                telescopeMediator.SetTrackingEnabled(true);
+                                Log("Re-enabled sidereal tracking.");
+                            }
+                        } catch (Exception trackEx) {
+                            global::NINA.Core.Utility.Logger.Warning($"[2-Point Polar Alignment] Could not re-enable sidereal tracking on exit: {trackEx.Message}");
+                        }
+                    }
 
                     // If running from sequence, and alignment terminates without resume, wake sequencer up as aborted
                     if (IsRunningFromSequence && RunningSequenceItem != null) {

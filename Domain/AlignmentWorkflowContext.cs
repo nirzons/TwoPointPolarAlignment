@@ -9,6 +9,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Domain {
         public double Angle2 { get; set; }
         public double LstMeasurement2 { get; set; }
         public double LstMeasurement1 { get; set; }
+        public double? MountDec1 { get; set; }
+        public double? MountDec2 { get; set; }
+        public bool MoveAxisStalled { get; set; }
+        public bool MoveAxisNeedsKeepalive { get; set; }
         
         public RotationDirection ActiveDirection { get; set; }
         public bool ActivePreRotate { get; set; }

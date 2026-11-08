@@ -6,6 +6,9 @@ using System.Windows.Media;
 using NINA.Core.Model;
 using NINA.Core.Model.Equipment;
 using NINA.Core.Utility.Notification;
+using NINA.Core.Enum;
+using NINA.Equipment.Equipment.MyTelescope;
+using NINA.Equipment.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Model;
 using NINA.PlateSolving;
@@ -61,7 +64,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
         }
 
         public async Task ExecuteWorkflowAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail) {
-            ReportLog(progress, "Starting alignment sequence...");
+            var asmVersion = typeof(AlignmentWorkflowController).Assembly.GetName().Version;
+            ReportLog(progress, $"Starting alignment sequence (v{asmVersion})...");
+            context.MoveAxisStalled = false;
+            context.MoveAxisNeedsKeepalive = false;
             
             var rand = new Random();
             context.ManualSimBiasRA = (rand.NextDouble() > 0.5 ? 1.0 : -1.0) * (0.25 + rand.NextDouble() * 0.25) / 2.0 / 15.0;
@@ -95,14 +101,22 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             }
             context.Coordinates1 = result1.Coordinates;
             context.Angle1 = result1.PositionAngle;
-            context.LstMeasurement1 = _telescopeMediator.GetInfo()?.SiderealTime ?? context.Coordinates1.RA;
+            var infoAtPoint1 = _telescopeMediator.GetInfo();
+            context.LstMeasurement1 = infoAtPoint1?.SiderealTime ?? context.Coordinates1.RA;
+            context.MountDec1 = (infoAtPoint1?.Connected ?? false) ? infoAtPoint1.Declination : (double?)null;
+            ReportLog(progress, $"[Measurement 1] Solved RA: {context.Coordinates1.RA:F4}h, Dec: {context.Coordinates1.Dec:F4}°, PA: {context.Angle1:F2}°" +
+                                (context.MountDec1.HasValue ? $" | Mount RA: {infoAtPoint1.RightAscensionString}, Dec: {infoAtPoint1.DeclinationString}" : string.Empty));
 
             await ExecuteRotationAsync(context, token, progress, updateThumbnail);
 
             var result2 = await ExecuteMeasurementLoopAsync(context, token, progress, updateThumbnail, 2);
             context.Coordinates2 = result2.Coordinates;
             context.Angle2 = result2.PositionAngle;
-            context.LstMeasurement2 = _telescopeMediator.GetInfo()?.SiderealTime ?? context.Coordinates2.RA;
+            var infoAtPoint2 = _telescopeMediator.GetInfo();
+            context.LstMeasurement2 = infoAtPoint2?.SiderealTime ?? context.Coordinates2.RA;
+            context.MountDec2 = (infoAtPoint2?.Connected ?? false) ? infoAtPoint2.Declination : (double?)null;
+            ReportLog(progress, $"[Measurement 2] Solved RA: {context.Coordinates2.RA:F4}h, Dec: {context.Coordinates2.Dec:F4}°, PA: {context.Angle2:F2}°" +
+                                (context.MountDec2.HasValue ? $" | Mount RA: {infoAtPoint2.RightAscensionString}, Dec: {infoAtPoint2.DeclinationString}" : string.Empty));
 
             await ExecuteCalculationAndLiveAdjustmentAsync(context, token, progress, updateThumbnail);
         }
@@ -118,15 +132,25 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
         private async Task ExecutePreFlightAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress) {
             ReportLog(progress, "Initiating Phase A (Pre-flight Checks)...");
 
+            context.IsSimulation = (_cameraMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                                   (_telescopeMediator.GetInfo()?.Name?.Contains("Simulator", StringComparison.OrdinalIgnoreCase) ?? false);
+
             if (!(_cameraMediator.GetInfo()?.Connected ?? false)) {
                 string err = "Error: Camera is not connected!";
                 ReportLog(progress, err);
                 throw new InvalidOperationException(err);
             }
 
-            bool isMountConnected = _telescopeMediator.GetInfo()?.Connected ?? false;
+            var mountInfo = _telescopeMediator.GetInfo();
+            bool isMountConnected = mountInfo?.Connected ?? false;
             if (!isMountConnected && _settingsManager.Method != RotationMethod.Manual) {
                 string err = "Error: Telescope Mount is not connected!";
+                ReportLog(progress, err);
+                throw new InvalidOperationException(err);
+            }
+
+            if (isMountConnected && _settingsManager.Method != RotationMethod.Manual && mountInfo.AlignmentMode == AlignmentMode.AltAz) {
+                string err = "Error: Mount reports Alt-Az alignment mode. Polar alignment requires an Equatorial / Polar mount configuration.";
                 ReportLog(progress, err);
                 throw new InvalidOperationException(err);
             }
@@ -138,13 +162,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     throw new InvalidOperationException(err);
                 }
             }
+
+            ResolveLatitude(progress, validatePreFlight: !context.IsSimulation);
             
             ReportLog(progress, "Phase A (Pre-flight Checks) completed successfully!");
             await Task.Delay(1000, token);
-            
-            if (isMountConnected && (_telescopeMediator.GetInfo()?.TrackingEnabled ?? false)) {
-                try { _telescopeMediator.SetTrackingEnabled(false); ReportLog(progress, "Disabling telescope tracking."); } catch { }
-            }
         }
 
         private async Task ExecuteInitialPositioningAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress) {
@@ -326,18 +348,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
 
             if (context.ActivePreRotate) {
                 double offsetDegrees = _settingsManager.RotationAmount / 2.0;
-                double offsetHours = offsetDegrees / 15.0;
                 ReportStatus(progress, "Slewing (Pre-rotate)", "#FBBF24");
-                ReportLog(progress, $"Pre-rotating RA by {offsetDegrees:F1}Â°...");
+                ReportLog(progress, $"Pre-rotating RA by {offsetDegrees:F1}°...");
 
                 if (currentPosition != null) {
-                    double targetRA = currentPosition.RA + (context.ActiveDirection == RotationDirection.East ? -offsetHours : offsetHours);
-                    if (targetRA < 0) targetRA += 24.0;
-                    if (targetRA >= 24.0) targetRA -= 24.0;
-
-                    Coordinates targetCoords = new Coordinates(targetRA, currentPosition.Dec, currentPosition.Epoch, Coordinates.RAType.Hours);
-                    await ExecuteHardwareOperationAsync(() => _telescopeMediator.SlewToCoordinatesAsync(targetCoords, token), token, "Slew to Target");
-                    try { _telescopeMediator.SetTrackingEnabled(false); } catch { }
+                    RotationDirection preRotateDir = context.ActiveDirection == RotationDirection.East ? RotationDirection.West : RotationDirection.East;
+                    await RotateMountAroundRaAsync(context, offsetDegrees, preRotateDir, currentPosition, "Pre-rotate", token, progress);
                 }
             }
         }
@@ -349,6 +365,13 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
 
         private async Task<PlateSolveResult> ExecuteMeasurementLoopAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail, int measurementIndex) {
             ReportLog(progress, $"Initiating Phase {(measurementIndex == 1 ? "C" : "E")} (Measurement {measurementIndex})...");
+
+            if ((_telescopeMediator?.GetInfo()?.Connected ?? false) && (_telescopeMediator.GetInfo()?.TrackingEnabled ?? false)) {
+                try {
+                    _telescopeMediator.SetTrackingEnabled(false);
+                    ReportLog(progress, "Disabling telescope tracking for stationary measurement.");
+                } catch { }
+            }
             
             int exposuresCount = (int)_settingsManager.ExposuresPerPoint;
             var successfulSolves = new List<SubframeSolveInfo>();
@@ -639,18 +662,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                     await OnManualRotationRequested(context, _settingsManager.RotationAmount, context.ActiveDirection, context.Coordinates1, seq, capSolver, context.IsSimulation);
                     context.CurrentSimulationOffset = _settingsManager.RotationAmount; // Simulate manual move
                 }
+                await Task.Delay(1000, token);
             } else {
                 ReportStatus(progress, "Slewing", "#FBBF24");
                 var basePos = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates1;
-                double rotOffsetHours = _settingsManager.RotationAmount / 15.0;
-                double targetRA = basePos.RA + (context.ActiveDirection == RotationDirection.East ? rotOffsetHours : -rotOffsetHours);
-                if (targetRA < 0) targetRA += 24.0; if (targetRA >= 24.0) targetRA -= 24.0;
-                Coordinates targetCoords = new Coordinates(targetRA, basePos.Dec, basePos.Epoch, Coordinates.RAType.Hours);
-                
-                await ExecuteHardwareOperationAsync(() => _telescopeMediator.SlewToCoordinatesAsync(targetCoords, token), token, "Slew to Rotated Target");
-                try { _telescopeMediator.SetTrackingEnabled(false); } catch { }
+                await RotateMountAroundRaAsync(context, _settingsManager.RotationAmount, context.ActiveDirection, basePos, "Phase D Rotation", token, progress);
             }
-            await Task.Delay(1000, token);
         }
 
         private async Task ExecuteCalculationAndLiveAdjustmentAsync(AlignmentWorkflowContext context, CancellationToken token, IProgress<AlignmentProgressReport> progress, Action<ImageSource> updateThumbnail) {
@@ -676,6 +693,27 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
 
             // 3. Calibrate using normalized Point 1 coordinate
             var calibration = _polarSolver.Calibrate(correctedC1, context.Angle1, context.Coordinates2, context.Angle2, context.LstMeasurement2, latitude);
+
+            string mountDecDeltaText = string.Empty;
+            if (context.MountDec1.HasValue && context.MountDec2.HasValue) {
+                double decDeltaDeg = Math.Abs(context.MountDec2.Value - context.MountDec1.Value);
+                mountDecDeltaText = $", Mount ΔDec: {decDeltaDeg * 60.0:F2}'";
+                if (decDeltaDeg > 0.05) {
+                    ReportLog(progress, $"⚠️ Warning: Mount Declination changed by {decDeltaDeg * 60.0:F1}' between Point 1 and Point 2. Ensure the DEC clutch is locked and only the RA axis moves.");
+                }
+            }
+
+            ReportLog(progress, $"[Diagnostics] Site Latitude: {latitude:F4}°, Solved 3D Rotation: {calibration.SolvedRotationDegrees:F2}° (Target: {_settingsManager.RotationAmount:F1}°){mountDecDeltaText}");
+
+            if (!context.IsSimulation && calibration.SolvedRotationDegrees < 5.0) {
+                string rotErr = $"Mount rotated by only {calibration.SolvedRotationDegrees:F2}° between Point 1 and Point 2 (target: {_settingsManager.RotationAmount:F1}°). Cannot compute a reliable polar axis from such a small rotation. Check mount tracking/standby state, RA clutch tension, or mount limits.";
+                ReportLog(progress, $"Error: {rotErr}");
+                throw new InvalidOperationException(rotErr);
+            }
+
+            if (_settingsManager.Method == RotationMethod.Automatic && !context.IsSimulation && Math.Abs(calibration.SolvedRotationDegrees - _settingsManager.RotationAmount) > 8.0) {
+                ReportLog(progress, $"⚠️ Warning: Solved 3D rotation ({calibration.SolvedRotationDegrees:F1}°) differs significantly from commanded rotation ({_settingsManager.RotationAmount:F1}°). Check RA clutch tension, cable snags, or mount limits.");
+            }
             
             ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2, context.Coordinates2.Epoch);
             progress.Report(new AlignmentProgressReport { HasSuccessfulAlignmentReached = true });
@@ -683,6 +721,10 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             if (context.MeasureOnly) {
                 ReportLog(progress, "Measurement complete. Exiting sequencer step.");
                 return;
+            }
+
+            if ((_telescopeMediator?.GetInfo()?.Connected ?? false) && (_telescopeMediator.GetInfo()?.TrackingEnabled ?? false)) {
+                try { _telescopeMediator.SetTrackingEnabled(false); } catch { }
             }
 
             var profile = _profileService?.ActiveProfile;
@@ -700,6 +742,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
+            Coordinates lastLiveCoords = context.Coordinates2;
 
             try {
                 while (!token.IsCancellationRequested) {
@@ -736,7 +779,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                 var err = _polarSolver.EvaluateLiveError(c2, context.LstMeasurement2, calibration, latitude);
                                 ReportAlignmentProgress(progress, err);
                             } else {
-                                var liveHintCoords = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2;
+                                var liveHintCoords = lastLiveCoords ?? ((_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2);
                                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
                                     Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(2), FocalLength = profile.TelescopeSettings.FocalLength,
                                     PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0, Binning = binVal, SearchRadius = 15.0, Regions = 5000.0,
@@ -748,6 +791,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                 try {
                                     var liveResult = await ExecuteHardwareOperationAsync(() => captureSolver.Solve(seq, solverParam, solveProgress, new Progress<ApplicationStatus>(), cts.Token), cts.Token, "Live Solve Capture");
                                     if (liveResult != null && liveResult.Success) {
+                                        lastLiveCoords = liveResult.Coordinates;
                                         ReportLog(progress, $"[Epoch] Live solver returned epoch: {liveResult.Coordinates.Epoch}. Passing native J2000 coordinates to solver pipeline.");
                                         ReportStatus(progress, "Solved", "#22C55E");
                                         double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
@@ -756,7 +800,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                     } else {
                                         ReportStatus(progress, "Could not solve", "#EF4444");
                                     }
-                                } catch (Exception ex) when (!(ex is OperationCanceledException)) { }
+                                } catch (Exception ex) when (!(ex is OperationCanceledException)) {
+                                    global::NINA.Core.Utility.Logger.Debug($"[2-Point Polar Alignment] Live solve frame exception ignored: {ex.Message}");
+                                }
                             }
                         } catch (OperationCanceledException) {
                             if (context.IsRunningFromSequence && context.SequenceResumeTcs != null && context.SequenceResumeTcs.Task.IsCompleted) {
@@ -835,18 +881,452 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
         }
 
         private double GetLatitude() {
-            try {
-                var info = _telescopeMediator?.GetInfo();
-                if (info != null) {
-                    var latProp = info.GetType().GetProperty("Latitude") ?? info.GetType().GetProperty("SiteLatitude");
-                    if (latProp != null) return Convert.ToDouble(latProp.GetValue(info));
+            return ResolveLatitude(progress: null, validatePreFlight: false);
+        }
+
+        private double ResolveLatitude(IProgress<AlignmentProgressReport> progress, bool validatePreFlight) {
+            var astrometry = _profileService?.ActiveProfile?.AstrometrySettings;
+            var info = _telescopeMediator?.GetInfo();
+
+            bool hasNinaLocation = astrometry != null &&
+                                   !double.IsNaN(astrometry.Latitude) &&
+                                   !double.IsInfinity(astrometry.Latitude) &&
+                                   !(Math.Abs(astrometry.Latitude) < 1e-6 && Math.Abs(astrometry.Longitude) < 1e-6);
+
+            bool hasMountLat = (info?.Connected ?? false) &&
+                               !double.IsNaN(info.SiteLatitude) &&
+                               !double.IsInfinity(info.SiteLatitude) &&
+                               Math.Abs(info.SiteLatitude - (-1.0)) > 1e-6 &&
+                               Math.Abs(info.SiteLatitude) > 1e-6;
+
+            if (hasNinaLocation) {
+                if (progress != null && hasMountLat && Math.Abs(astrometry.Latitude - info.SiteLatitude) > 0.1) {
+                    ReportLog(progress, $"⚠️ Warning: Mount SiteLatitude ({info.SiteLatitude:F2}°) differs from N.I.N.A. Astrometry Latitude ({astrometry.Latitude:F2}°). Using N.I.N.A. Astrometry Latitude.");
                 }
-            } catch (Exception ex) {
-                global::NINA.Core.Utility.Logger.Warning($"[2-Point Polar Alignment] GetLatitude reflection failed: {ex.Message}");
+                return astrometry.Latitude;
             }
-            // F-4 Fix: Log fallback so it's not silently swallowed
-            global::NINA.Core.Utility.Logger.Warning("[2-Point Polar Alignment] Could not retrieve site latitude from mount. Using fallback latitude of 45.0°. Solver results may be inaccurate if actual latitude differs significantly.");
+
+            if (hasMountLat) {
+                if (progress != null) {
+                    ReportLog(progress, $"[Latitude] N.I.N.A. Astrometry coordinates are (0, 0); using mount SiteLatitude ({info.SiteLatitude:F2}°).");
+                }
+                return info.SiteLatitude;
+            }
+
+            if (validatePreFlight) {
+                string err = "Error: Site location (Latitude/Longitude) is not configured in N.I.N.A. (Options -> General -> Astrometry). Accurate site latitude is required for polar alignment.";
+                if (progress != null) ReportLog(progress, err);
+                throw new InvalidOperationException(err);
+            }
+
+            global::NINA.Core.Utility.Logger.Warning("[2-Point Polar Alignment] Could not retrieve site latitude from N.I.N.A. AstrometrySettings or mount. Using fallback latitude of 45.0°.");
             return 45.0;
+        }
+
+        private async Task RotateMountAroundRaAsync(AlignmentWorkflowContext context, double targetDegrees, RotationDirection moveDirection, Coordinates fallbackBaseCoords, string operationLabel, CancellationToken token, IProgress<AlignmentProgressReport> progress) {
+            var info = _telescopeMediator?.GetInfo();
+            bool canMovePrimary = (info?.Connected ?? false) && info.CanMovePrimaryAxis && !context.MoveAxisStalled;
+            double movedViaAxisDegrees = 0.0;
+
+            if (canMovePrimary) {
+                double rate = SelectPrimaryAxisRate(info, progress);
+                double signedRate = moveDirection == RotationDirection.East ? rate : -rate;
+
+                // Wake mount out of Standby before MoveAxis (critical for OnStep, EQMOD, GSS, etc.,
+                // which ignore MoveAxis / guide commands while TrackingEnabled == false in Standby)
+                if (info.CanSetTrackingEnabled) {
+                    bool wasTracking = info.TrackingEnabled;
+                    try { _telescopeMediator.SetTrackingMode(global::NINA.Equipment.Interfaces.TrackingMode.Sidereal); } catch { }
+                    try {
+                        _telescopeMediator.SetTrackingEnabled(true);
+                        if (!wasTracking) {
+                            ReportLog(progress, "[MoveAxis] Enabled sidereal tracking to wake mount out of standby before axis rotation.");
+                            await Task.Delay(500, token);
+                        }
+                    } catch (Exception trackEx) {
+                        global::NINA.Core.Utility.Logger.Warning($"[2-Point Polar Alignment] Could not enable sidereal tracking before MoveAxis: {trackEx.Message}");
+                    }
+                }
+
+                ReportLog(progress, $"[MoveAxis] Rotating Primary (RA) axis {moveDirection} by {targetDegrees:F1}° at {rate:F2}°/s ({operationLabel})...");
+
+                double pollingInterval = Math.Clamp(_profileService?.ActiveProfile?.ApplicationSettings?.DevicePollingInterval ?? 2.0, 0.5, 10.0);
+                double initialMotionWindowSec = Math.Max(5.0, pollingInterval * 2.0 + 1.0);
+                double pauseResumeSec = Math.Max(5.0, pollingInterval * 2.0 + 1.0);
+                const double keepaliveIntervalSec = 3.5;
+                bool keepaliveEnabled = context.MoveAxisNeedsKeepalive || IsWatchdogMoveAxisMount(info);
+
+                double? optionalApproachRate = targetDegrees >= 5.0 ? SelectApproachAxisRate(info, rate) : null;
+                double activeRate = rate;
+                double activeSignedRate = signedRate;
+                bool isApproachStage = false;
+
+                await ExecuteHardwareOperationAsync(async () => {
+                    var startInfo = _telescopeMediator.GetInfo();
+                    var startPos = _telescopeMediator.GetCurrentPosition();
+                    double prevAngleDeg = GetMechanicalHourAngleDegrees(startInfo, startPos);
+                    double signedAccumulatedDeg = 0.0;
+                    double maxTraveledDeg = 0.0;
+                    double segmentStartTraveledDeg = 0.0;
+                    double lastProgressSec = 0.0;
+                    double lastKeepaliveSec = 0.0;
+                    double lastPollSec = 0.0;
+                    double lastPollTraveledDeg = 0.0;
+                    double interpAnchorSec = 0.0;
+                    double interpAnchorDeg = 0.0;
+                    double measuredCruiseRate = rate;
+                    bool hasMeasuredCruise = false;
+                    double measuredRampLagDeg = 0.5 * rate * 2.2;
+                    bool hasMeasuredRampLag = false;
+                    double approachStageStartSec = 0.0;
+                    double measuredApproachRate = optionalApproachRate ?? rate;
+                    bool hasMeasuredApproach = false;
+                    bool initialMotionVerified = false;
+                    bool observedSlewingTrue = false;
+                    bool loggedWatchdogResume = false;
+
+                    double expectedSeconds = targetDegrees / Math.Max(0.05, rate) + 12.0;
+                    TimeSpan maxDuration = TimeSpan.FromSeconds(Math.Max(40.0, expectedSeconds * 3.0 + 20.0));
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                    try {
+                        _telescopeMediator.MoveAxis(TelescopeAxes.Primary, activeSignedRate);
+
+                        while (true) {
+                            token.ThrowIfCancellationRequested();
+                            await Task.Delay(100, token);
+
+                            double nowSec = sw.Elapsed.TotalSeconds;
+                            var curInfo = _telescopeMediator.GetInfo();
+                            var curPos = _telescopeMediator.GetCurrentPosition();
+                            if (curInfo?.Slewing == true) {
+                                observedSlewingTrue = true;
+                            }
+
+                            double curAngleDeg = GetMechanicalHourAngleDegrees(curInfo, curPos);
+
+                            double stepDeg = curAngleDeg - prevAngleDeg;
+                            while (stepDeg > 180.0) stepDeg -= 360.0;
+                            while (stepDeg < -180.0) stepDeg += 360.0;
+                            signedAccumulatedDeg += stepDeg;
+                            prevAngleDeg = curAngleDeg;
+
+                            double traveledDeg = Math.Abs(signedAccumulatedDeg);
+                            movedViaAxisDegrees = traveledDeg;
+
+                            if (Math.Abs(stepDeg) > 1e-4) {
+                                double dtPoll = nowSec - lastPollSec;
+                                double pollStepDeg = Math.Abs(stepDeg);
+
+                                if (!isApproachStage) {
+                                    if (lastPollSec >= 3.5 && dtPoll >= 0.8) {
+                                        double instRate = pollStepDeg / dtPoll;
+                                        if (instRate >= rate * 0.6 && instRate <= rate * 1.35) {
+                                            measuredCruiseRate = hasMeasuredCruise ? (0.5 * measuredCruiseRate + 0.5 * instRate) : instRate;
+                                            hasMeasuredCruise = true;
+                                            double rawLag = measuredCruiseRate * nowSec - traveledDeg;
+                                            measuredRampLagDeg = Math.Clamp(rawLag, 0.1, measuredCruiseRate * 6.0);
+                                            hasMeasuredRampLag = true;
+                                        }
+                                    }
+                                } else if (optionalApproachRate.HasValue) {
+                                    double appRate = optionalApproachRate.Value;
+                                    if ((nowSec - approachStageStartSec) >= 1.5 && dtPoll >= 0.8) {
+                                        double instRate = pollStepDeg / dtPoll;
+                                        if (instRate >= appRate * 0.35 && instRate <= appRate * 1.65) {
+                                            measuredApproachRate = hasMeasuredApproach ? (0.5 * measuredApproachRate + 0.5 * instRate) : instRate;
+                                            hasMeasuredApproach = true;
+                                        }
+                                    }
+                                }
+
+                                lastPollSec = nowSec;
+                                lastPollTraveledDeg = traveledDeg;
+                                interpAnchorSec = nowSec;
+                                interpAnchorDeg = traveledDeg;
+                            }
+
+                            if (traveledDeg >= maxTraveledDeg + 0.05) {
+                                maxTraveledDeg = traveledDeg;
+                                lastProgressSec = nowSec;
+                            }
+
+                            if (!initialMotionVerified && traveledDeg >= 0.3) {
+                                initialMotionVerified = true;
+                            }
+
+                            if (!initialMotionVerified && nowSec >= initialMotionWindowSec) {
+                                context.MoveAxisStalled = true;
+                                ReportLog(progress, $"⚠️ [MoveAxis] Primary axis moved only {traveledDeg:F2}° after {nowSec:F1}s. Driver did not execute MoveAxis at slew speed; falling back to RA GoTo slew...");
+                                break;
+                            }
+
+                            double vFast = hasMeasuredCruise ? measuredCruiseRate : rate;
+                            double rampLagEst = hasMeasuredRampLag ? measuredRampLagDeg : (0.5 * vFast * 2.2);
+
+                            double estimatedTraveledDeg = traveledDeg;
+                            if (initialMotionVerified) {
+                                double dtSinceAnchor = Math.Clamp(nowSec - interpAnchorSec, 0.0, pollingInterval * 1.15);
+                                if (!isApproachStage) {
+                                    double vInterp = nowSec < 3.0 ? (0.5 * vFast) : vFast;
+                                    estimatedTraveledDeg = Math.Max(traveledDeg, interpAnchorDeg + vInterp * dtSinceAnchor);
+                                } else {
+                                    double vSlowInterp = hasMeasuredApproach ? measuredApproachRate : (optionalApproachRate ?? activeRate);
+                                    estimatedTraveledDeg = Math.Max(traveledDeg, interpAnchorDeg + vSlowInterp * dtSinceAnchor);
+                                }
+                            }
+
+                            if (!isApproachStage && optionalApproachRate.HasValue && initialMotionVerified) {
+                                double appRate = optionalApproachRate.Value;
+                                double rampDownDistEst = rampLagEst * (1.0 - (appRate * appRate) / Math.Max(0.01, vFast * vFast));
+                                double crawlBufferDeg = Math.Clamp(appRate * (pollingInterval * 2.4), 1.2, 2.5);
+                                double slowDownLeadDeg = Math.Clamp(rampDownDistEst + crawlBufferDeg, 1.8, targetDegrees * 0.45);
+
+                                if (estimatedTraveledDeg >= targetDegrees - slowDownLeadDeg) {
+                                    double signedAppRate = moveDirection == RotationDirection.East ? appRate : -appRate;
+                                    try {
+                                        _telescopeMediator.MoveAxis(TelescopeAxes.Primary, signedAppRate);
+                                        isApproachStage = true;
+                                        activeRate = appRate;
+                                        activeSignedRate = signedAppRate;
+                                        approachStageStartSec = nowSec;
+                                        lastKeepaliveSec = nowSec;
+                                        interpAnchorSec = nowSec;
+                                        interpAnchorDeg = estimatedTraveledDeg;
+                                        ReportLog(progress, $"[MoveAxis] Downshifting to {appRate:F2}°/s precision approach at {estimatedTraveledDeg:F1}° / {targetDegrees:F1}°...");
+                                    } catch (Exception downshiftEx) {
+                                        optionalApproachRate = null;
+                                        global::NINA.Core.Utility.Logger.Warning($"[2-Point Polar Alignment] Could not downshift MoveAxis rate to {appRate:F2}°/s: {downshiftEx.Message}");
+                                    }
+                                }
+                            }
+
+                            double stopLeadDeg;
+                            if (isApproachStage) {
+                                double vSlow = hasMeasuredApproach ? measuredApproachRate : activeRate;
+                                double stopCoastSlow = rampLagEst * ((vSlow * vSlow) / Math.Max(0.01, vFast * vFast)) + vSlow * 0.12;
+                                stopLeadDeg = Math.Clamp(stopCoastSlow, 0.03, 0.35);
+                            } else if (optionalApproachRate.HasValue) {
+                                stopLeadDeg = 0.05;
+                            } else {
+                                stopLeadDeg = Math.Clamp(rampLagEst * 0.85, 0.05, targetDegrees * 0.35);
+                            }
+
+                            if (traveledDeg >= targetDegrees || (initialMotionVerified && estimatedTraveledDeg >= targetDegrees - stopLeadDeg)) {
+                                movedViaAxisDegrees = Math.Max(traveledDeg, estimatedTraveledDeg);
+                                break;
+                            }
+
+                            double remainingSecEstimate = (targetDegrees - estimatedTraveledDeg) / Math.Max(0.05, activeRate);
+                            if (keepaliveEnabled && initialMotionVerified &&
+                                (nowSec - lastKeepaliveSec) >= keepaliveIntervalSec &&
+                                remainingSecEstimate > 0.8) {
+                                _telescopeMediator.MoveAxis(TelescopeAxes.Primary, activeSignedRate);
+                                lastKeepaliveSec = nowSec;
+                            }
+
+                            if (initialMotionVerified) {
+                                double noProgressSec = nowSec - lastProgressSec;
+                                double minSegAdvance = isApproachStage ? 0.25 : 0.5;
+                                bool advancedInSegment = (traveledDeg - segmentStartTraveledDeg) >= minSegAdvance;
+                                bool canFastResume = advancedInSegment &&
+                                                     observedSlewingTrue &&
+                                                     !(curInfo?.Slewing ?? false) &&
+                                                     noProgressSec >= Math.Max(2.5, pollingInterval + 0.5);
+
+                                if (canFastResume || noProgressSec >= pauseResumeSec) {
+                                    if (advancedInSegment) {
+                                        context.MoveAxisNeedsKeepalive = true;
+                                        keepaliveEnabled = true;
+                                        if (!loggedWatchdogResume) {
+                                            loggedWatchdogResume = true;
+                                            ReportLog(progress, $"[MoveAxis] Motion paused at {traveledDeg:F1}° / {targetDegrees:F1}° (firmware safety timer); re-engaging Primary axis...");
+                                        }
+                                        segmentStartTraveledDeg = traveledDeg;
+                                        try { _telescopeMediator.MoveAxis(TelescopeAxes.Primary, 0.0); } catch { }
+                                        await Task.Delay(200, token);
+                                        _telescopeMediator.MoveAxis(TelescopeAxes.Primary, activeSignedRate);
+                                        lastProgressSec = sw.Elapsed.TotalSeconds;
+                                        lastKeepaliveSec = sw.Elapsed.TotalSeconds;
+                                        interpAnchorSec = sw.Elapsed.TotalSeconds;
+                                        interpAnchorDeg = traveledDeg;
+                                        observedSlewingTrue = false;
+                                        continue;
+                                    } else {
+                                        ReportLog(progress, $"⚠️ Warning: Primary axis rotation stopped advancing at {traveledDeg:F1}° / {targetDegrees:F1}° even after re-engaging MoveAxis. Check mount limits or cable snags.");
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (sw.Elapsed > maxDuration) {
+                                ReportLog(progress, $"⚠️ Warning: Primary axis rotation timed out after {nowSec:F1}s (traveled {traveledDeg:F1}° / {targetDegrees:F1}°). Check mount slew rate or limits.");
+                                break;
+                            }
+                        }
+                    } finally {
+                        try {
+                            _telescopeMediator.MoveAxis(TelescopeAxes.Primary, 0.0);
+                        } catch (Exception stopEx) {
+                            global::NINA.Core.Utility.Logger.Error($"[2-Point Polar Alignment] Failed to stop Primary axis MoveAxis(0): {stopEx.Message}");
+                        }
+                    }
+                }, token, operationLabel);
+            }
+
+            if (!canMovePrimary || context.MoveAxisStalled) {
+                double remainingDegrees = Math.Max(0.0, targetDegrees - movedViaAxisDegrees);
+                if (remainingDegrees >= 0.5) {
+                    if (!canMovePrimary && !(info?.CanMovePrimaryAxis ?? false)) {
+                        ReportLog(progress, $"Mount does not support MoveAxis on Primary (RA) axis (CanMovePrimaryAxis=false); using equatorial RA GoTo slew ({operationLabel}).");
+                    } else if (movedViaAxisDegrees > 0.0) {
+                        var waitStopSw = System.Diagnostics.Stopwatch.StartNew();
+                        while ((_telescopeMediator?.GetInfo()?.Slewing ?? false) && waitStopSw.Elapsed.TotalSeconds < 5.0) {
+                            await Task.Delay(200, token);
+                        }
+                    }
+
+                    var basePos = _telescopeMediator?.GetCurrentPosition() ?? fallbackBaseCoords;
+                    if (basePos != null) {
+                        double offsetHours = remainingDegrees / 15.0;
+                        double targetRA = basePos.RA + (moveDirection == RotationDirection.East ? offsetHours : -offsetHours);
+                        if (targetRA < 0) targetRA += 24.0;
+                        if (targetRA >= 24.0) targetRA -= 24.0;
+
+                        // Avoid exact ±90.00° spherical coordinate singularity (cos(90°)=0 collapses targetRA in topocentric drivers)
+                        // while preserving constant Dec between Point 1 and Point 2 once nudged to ±89.95°.
+                        double slewDec = Math.Abs(basePos.Dec) > 89.96 ? (basePos.Dec >= 0 ? 89.95 : -89.95) : basePos.Dec;
+                        Coordinates targetCoords = new Coordinates(targetRA, slewDec, basePos.Epoch, Coordinates.RAType.Hours);
+                        ReportLog(progress, $"[GoTo Fallback] Rotating RA {moveDirection} by {remainingDegrees:F1}° to RA {targetRA:F2}h, Dec {slewDec:F2}° ({operationLabel})...");
+                        await ExecuteHardwareOperationAsync(() => _telescopeMediator.SlewToCoordinatesAsync(targetCoords, token), token, operationLabel);
+                    }
+                }
+            }
+
+            var decelSw = System.Diagnostics.Stopwatch.StartNew();
+            while ((_telescopeMediator?.GetInfo()?.Slewing ?? false) && decelSw.Elapsed.TotalSeconds < 10.0) {
+                await Task.Delay(200, token);
+            }
+
+            try { _telescopeMediator.SetTrackingEnabled(false); } catch { }
+
+            int settleSeconds = Math.Max(1, _profileService?.ActiveProfile?.TelescopeSettings?.SettleTime ?? 2);
+            ReportStatus(progress, "Settling", "#FBBF24");
+            ReportLog(progress, $"Waiting {settleSeconds}s for mount to settle...");
+            await Task.Delay(TimeSpan.FromSeconds(settleSeconds), token);
+        }
+
+        private double SelectPrimaryAxisRate(TelescopeInfo info, IProgress<AlignmentProgressReport> progress) {
+            double userRate = double.NaN;
+            if (_telescopeMediator?.GetDevice() is ITelescope telescopeDevice) {
+                userRate = Math.Abs(telescopeDevice.PrimaryMovingRate);
+            }
+
+            var supportedRanges = info?.PrimaryAxisRates;
+            bool IsWithinSupportedRanges(double r) {
+                if (supportedRanges == null || supportedRanges.Count == 0) return true;
+                foreach (var range in supportedRanges) {
+                    double min = Math.Min(range.Item1, range.Item2);
+                    double max = Math.Max(range.Item1, range.Item2);
+                    if (r >= min - 1e-6 && r <= max + 1e-6) return true;
+                }
+                return false;
+            }
+
+            if (!double.IsNaN(userRate) && !double.IsInfinity(userRate) && userRate >= 0.5 && IsWithinSupportedRanges(userRate)) {
+                return userRate;
+            }
+
+            double fallbackRate = 3.0;
+            if (supportedRanges != null && supportedRanges.Count > 0) {
+                if (IsWithinSupportedRanges(3.0)) {
+                    fallbackRate = 3.0;
+                } else {
+                    double bestBelowCap = -1.0;
+                    double smallestAboveFloor = double.MaxValue;
+                    double overallMax = 0.0;
+                    foreach (var range in supportedRanges) {
+                        double min = Math.Min(range.Item1, range.Item2);
+                        double max = Math.Max(range.Item1, range.Item2);
+                        if (max > overallMax) overallMax = max;
+                        if (min <= 4.0 && max >= 0.5) {
+                            double candidate = Math.Min(max, 4.0);
+                            if (candidate > bestBelowCap) bestBelowCap = candidate;
+                        }
+                        if (min >= 0.5 && min < smallestAboveFloor) {
+                            smallestAboveFloor = min;
+                        }
+                    }
+                    if (bestBelowCap >= 0.5) fallbackRate = bestBelowCap;
+                    else if (smallestAboveFloor < double.MaxValue) fallbackRate = smallestAboveFloor;
+                    else if (overallMax > 0.0) fallbackRate = overallMax;
+                }
+            }
+
+            if (progress != null && !double.IsNaN(userRate) && userRate > 0.0 && userRate < 0.5) {
+                ReportLog(progress, $"[MoveAxis] Mount manual Moving Rate ({userRate:F4}°/s) is set to a slow guide/nudge speed (< 0.5°/s); using {fallbackRate:F2}°/s for alignment rotation.");
+            }
+            return fallbackRate;
+        }
+
+        private static double? SelectApproachAxisRate(TelescopeInfo info, double cruiseRate) {
+            if (cruiseRate <= 0.45) {
+                return null;
+            }
+
+            double desired = cruiseRate >= 2.5 ? 0.30 : 0.25;
+            var supportedRanges = info?.PrimaryAxisRates;
+            if (supportedRanges == null || supportedRanges.Count == 0) {
+                return desired;
+            }
+
+            double maxAllowed = Math.Min(0.60, cruiseRate * 0.55);
+            double minAllowed = 0.12;
+            double bestCandidate = double.NaN;
+            double bestDist = double.MaxValue;
+
+            foreach (var range in supportedRanges) {
+                double min = Math.Min(range.Item1, range.Item2);
+                double max = Math.Max(range.Item1, range.Item2);
+                if (desired >= min - 1e-6 && desired <= max + 1e-6) {
+                    return desired;
+                }
+                if (max >= minAllowed && min <= maxAllowed) {
+                    double clamped = Math.Clamp(desired, Math.Max(min, minAllowed), Math.Min(max, maxAllowed));
+                    double dist = Math.Abs(clamped - desired);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestCandidate = clamped;
+                    }
+                }
+            }
+
+            return !double.IsNaN(bestCandidate) ? bestCandidate : null;
+        }
+
+        private static bool IsWatchdogMoveAxisMount(TelescopeInfo info) {
+            if (info == null) return false;
+            static bool Matches(string value) =>
+                !string.IsNullOrEmpty(value) &&
+                (value.Contains("OnStep", StringComparison.OrdinalIgnoreCase) ||
+                 value.Contains("On-Step", StringComparison.OrdinalIgnoreCase) ||
+                 value.Contains("TeenAstro", StringComparison.OrdinalIgnoreCase));
+            return Matches(info.DeviceId) || Matches(info.Name) || Matches(info.DisplayName) || Matches(info.Description);
+        }
+
+        private static double GetMechanicalHourAngleDegrees(TelescopeInfo info, Coordinates pos) {
+            if (info != null && !double.IsNaN(info.SiderealTime) && pos != null) {
+                double haHours = info.SiderealTime - pos.RA;
+                double haDeg = (haHours * 15.0) % 360.0;
+                if (haDeg < 0) haDeg += 360.0;
+                return haDeg;
+            }
+            if (pos != null) {
+                double raDeg = pos.RADegrees % 360.0;
+                if (raDeg < 0) raDeg += 360.0;
+                return raDeg;
+            }
+            return 0.0;
         }
 
         private string FormatTotalError(double errorArcmin) {

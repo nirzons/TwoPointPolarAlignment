@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.5.0 — Mechanical RA MoveAxis Rotation, Astrometry Latitude & Tracking Restoration
+
+### 🐛 Bug Fixes & Hardware Hardening
+- **Pure Mechanical RA Rotation (`MoveAxis`)**:
+  - Replaced equatorial sky-coordinate GoTo slews (`SlewToCoordinatesAsync`) during Pre-rotate and Phase D rotation with pure Primary (RA) axis motor movement (`ITelescopeMediator.MoveAxis(TelescopeAxes.Primary, rate)`), falling back to GoTo only when `CanMovePrimaryAxis` is false.
+  - Eliminates unintended Declination motor movements caused by mount pointing models, `Sync()` offsets (e.g., after Slew & Center), cone/home offsets on mounts without physical home switches, and meridian crossings near the pole.
+  - Automatically uses the user's / mount's configured **Moving Rate** from N.I.N.A. (`ITelescope.PrimaryMovingRate`), with a safe fallback inside `PrimaryAxisRates` if the manual jog rate was left on a slow guide/nudge speed (`< 0.5°/s`).
+  - **Two-Stage Precision Approach & Live Poll Interpolation**: Measures true cruise velocity and startup ramp lag, interpolates angle at `100ms` resolution between N.I.N.A.'s 2-second device polls, and automatically downshifts to a `0.25°/s`–`0.30°/s` precision approach before reaching the target angle.
+  - Wakes mounts out of Standby before `MoveAxis` (`SetTrackingEnabled(true)`), refreshes/resumes `MoveAxis` across firmware safety watchdogs (such as OnStep's 10-second `GUIDE_TIME_LIMIT`), and falls back automatically to an RA-only GoTo slew if a legacy driver fails to move via `MoveAxis`.
+- **Authoritative Site Latitude Resolution (`AstrometrySettings.Latitude`)**:
+  - Fixed `GetLatitude()` to prioritize N.I.N.A.'s configured **Options $\rightarrow$ General $\rightarrow$ Astrometry** site latitude (`AstrometrySettings.Latitude`) instead of unvalidated mount driver `SiteLatitude` values (which could hold stale coordinates, `-1.0°`, or `0.0°` when unimplemented/disconnected).
+  - Added pre-flight site location validation and a diagnostic warning when mount `SiteLatitude` differs from N.I.N.A.'s `AstrometrySettings.Latitude` by more than `0.1°`.
+- **Automatic Sidereal Tracking Restoration**:
+  - Re-enables sidereal tracking automatically when alignment finishes or stops (excluding explicit **Home** operations), preventing ASCOM `Sync()` rejections (`"Telescope is not tracking to be able to sync"`) during subsequent **Framing Assistant / Slew & Center** runs.
+- **Mount Settling, Alt-Az Guard & Rotation Diagnostics**:
+  - Honors N.I.N.A.'s configured `TelescopeSettings.SettleTime` after both Pre-rotate and Phase D rotation once `Slewing` completes.
+  - Added a pre-flight guard rejecting mounts connected in `AltAz` alignment mode.
+  - Logs solved 3D rotation angle and mount $\Delta\text{Dec}$ between Point 1 and Point 2, warning if mechanical DEC movement or RA clutch slip is detected.
+
+---
+
 ## v1.5.4.0 — Dynamic Plate Solving Defaults & Telemetry Hardening (2026-07-30)
 
 ### 🚀 New Features & Enhancements

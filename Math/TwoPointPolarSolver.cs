@@ -40,6 +40,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
             double r21 = X2.Y * X1.X + Y2.Y * Y1.X + v2.Y * v1.X;
             double r12 = X2.X * X1.Y + Y2.X * Y1.Y + v2.X * v1.Y;
 
+            double r11 = X2.X * X1.X + Y2.X * Y1.X + v2.X * v1.X;
+            double r22 = X2.Y * X1.Y + Y2.Y * Y1.Y + v2.Y * v1.Y;
+            double r33 = X2.Z * X1.Z + Y2.Z * Y1.Z + v2.Z * v1.Z;
+            double cosRot = System.Math.Clamp((r11 + r22 + r33 - 1.0) * 0.5, -1.0, 1.0);
+            double solvedRotationDegrees = System.Math.Acos(cosRot) * 180.0 / System.Math.PI;
+
             Vector3D pRaw = new Vector3D(r32 - r23, r13 - r31, r21 - r12);
             if (pRaw.Length < 1e-6) {
                 throw new InvalidOperationException(
@@ -54,7 +60,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Solvers {
                 P = new Vector3D(-P.X, -P.Y, -P.Z);
             }
 
-            return new AlignmentCalibrationState(P, v2, lstMeasurement2);
+            return new AlignmentCalibrationState(P, v2, lstMeasurement2, solvedRotationDegrees);
         }
 
         public AlignmentError EvaluateLiveError(Coordinates liveCoordinates, double lstLive, AlignmentCalibrationState calibration, double siteLatitude) {
