@@ -28,6 +28,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
         private string _binning = "(Current)";
         private int? _offset = null;
         private int _plateSolveRetries = 5;
+        private double _adjustmentSettleTime = 0.0;
         private bool _enableOnePointAlignment = true;
         private AltitudeKnobDirection _altKnobDirection = AltitudeKnobDirection.UpArrow;
         private AzimuthKnobDirection _azKnobDirection = AzimuthKnobDirection.LeftRightArrow;
@@ -48,6 +49,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
         private string _overrideBinning;
         private int? _overrideOffset;
         private int? _overridePlateSolveRetries;
+        private double? _overrideAdjustmentSettleTime;
         private bool? _overrideEnableOnePointAlignment;
         private ExposuresPerPoint? _overrideExposuresPerPoint;
 
@@ -63,7 +65,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             int? offset,
             int? plateSolveRetries,
             bool? enableOnePointAlignment,
-            ExposuresPerPoint? exposuresPerPoint)
+            ExposuresPerPoint? exposuresPerPoint,
+            double? adjustmentSettleTime = null)
         {
             _isSequenceOverrideActive = true;
             _overrideExposureTime = exposureTime;
@@ -76,6 +79,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             _overrideBinning = binning;
             _overrideOffset = offset;
             _overridePlateSolveRetries = plateSolveRetries;
+            _overrideAdjustmentSettleTime = adjustmentSettleTime.HasValue ? (double.IsNaN(adjustmentSettleTime.Value) ? 0.0 : Math.Clamp(adjustmentSettleTime.Value, 0.0, 120.0)) : null;
             _overrideEnableOnePointAlignment = enableOnePointAlignment;
             _overrideExposuresPerPoint = exposuresPerPoint;
 
@@ -89,6 +93,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             OnPropertyChanged(nameof(Binning));
             OnPropertyChanged(nameof(Offset));
             OnPropertyChanged(nameof(PlateSolveRetries));
+            OnPropertyChanged(nameof(AdjustmentSettleTime));
             OnPropertyChanged(nameof(EnableOnePointAlignment));
             OnPropertyChanged(nameof(ExposuresPerPoint));
         }
@@ -106,6 +111,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             _overrideBinning = null;
             _overrideOffset = null;
             _overridePlateSolveRetries = null;
+            _overrideAdjustmentSettleTime = null;
             _overrideEnableOnePointAlignment = null;
             _overrideExposuresPerPoint = null;
 
@@ -119,6 +125,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             OnPropertyChanged(nameof(Binning));
             OnPropertyChanged(nameof(Offset));
             OnPropertyChanged(nameof(PlateSolveRetries));
+            OnPropertyChanged(nameof(AdjustmentSettleTime));
             OnPropertyChanged(nameof(EnableOnePointAlignment));
             OnPropertyChanged(nameof(ExposuresPerPoint));
         }
@@ -200,6 +207,20 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             set { if (_plateSolveRetries != value) { _plateSolveRetries = value; SaveSetting(nameof(PlateSolveRetries), value); OnPropertyChanged(); } }
         }
 
+        /// <summary>
+        /// Maximum pause (seconds) between live adjustment frames, giving the user time to turn the
+        /// Alt/Az knobs and the rig time to settle. Scaled down as alignment improves. 0 = disabled.
+        /// </summary>
+        public double AdjustmentSettleTime
+        {
+            get => (_isSequenceOverrideActive && _overrideAdjustmentSettleTime.HasValue) ? _overrideAdjustmentSettleTime.Value : _adjustmentSettleTime;
+            set
+            {
+                double clamped = double.IsNaN(value) ? 0.0 : Math.Clamp(value, 0.0, 120.0);
+                if (_adjustmentSettleTime != clamped) { _adjustmentSettleTime = clamped; SaveSetting(nameof(AdjustmentSettleTime), clamped); OnPropertyChanged(); }
+            }
+        }
+
         public bool EnableOnePointAlignment
         {
             get => (_isSequenceOverrideActive && _overrideEnableOnePointAlignment.HasValue) ? _overrideEnableOnePointAlignment.Value : _enableOnePointAlignment;
@@ -273,6 +294,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                 int oVal = accessor.GetValueInt32(nameof(Offset), -1);
                 _offset = oVal >= 0 ? oVal : (int?)null;
                 _plateSolveRetries = accessor.GetValueInt32(nameof(PlateSolveRetries), 5);
+                _adjustmentSettleTime = Math.Clamp(accessor.GetValueDouble(nameof(AdjustmentSettleTime), 0.0), 0.0, 120.0);
                 _enableOnePointAlignment = accessor.GetValueBoolean(nameof(EnableOnePointAlignment), true);
                 _altKnobDirection = (AltitudeKnobDirection)accessor.GetValueInt32(nameof(AltKnobDirection), (int)AltitudeKnobDirection.UpArrow);
                 _azKnobDirection = (AzimuthKnobDirection)accessor.GetValueInt32(nameof(AzKnobDirection), (int)AzimuthKnobDirection.LeftRightArrow);
@@ -320,6 +342,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
                         accessor.SetValueString(nameof(Binning), settingsObj.Binning ?? "1x1");
                         accessor.SetValueInt32(nameof(Offset), settingsObj.Offset);
                         accessor.SetValueInt32(nameof(PlateSolveRetries), settingsObj.PlateSolveRetries);
+                        accessor.SetValueDouble(nameof(AdjustmentSettleTime), settingsObj.AdjustmentSettleTime);
                         accessor.SetValueBoolean(nameof(EnableOnePointAlignment), settingsObj.EnableOnePointAlignment);
                         accessor.SetValueInt32(nameof(AltKnobDirection), (int)settingsObj.AltKnobDirection);
                         accessor.SetValueInt32(nameof(AzKnobDirection), (int)settingsObj.AzKnobDirection);
@@ -380,6 +403,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Services
             public int Offset { get; set; } = 0;
             public double TelescopeMoveRate { get; set; } = 3.0;
             public int PlateSolveRetries { get; set; } = 3;
+            public double AdjustmentSettleTime { get; set; } = 0.0;
             public bool EnableOnePointAlignment { get; set; } = false;
             public AltitudeKnobDirection AltKnobDirection { get; set; } = AltitudeKnobDirection.UpArrow;
             public AzimuthKnobDirection AzKnobDirection { get; set; } = AzimuthKnobDirection.LeftRightArrow;

@@ -408,6 +408,12 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
             IPlateSolver solver = context.IsSimulation ? null : _plateSolverFactory.GetPlateSolver(plateSolveSettings);
             ICaptureSolver captureSolver = context.IsSimulation ? null : _plateSolverFactory.GetCaptureSolver(solver, null, _imagingMediator, _filterWheelMediator);
 
+            if (measurementIndex == 1) {
+                string solverName = GetSolverDisplayName(solver, plateSolveSettings);
+                bool isAstap = IsAstapSolver(solver, plateSolveSettings);
+                ReportLog(progress, $"[Diagnostics] Active Plate Solver: {solverName} (Polar Expansion: {(isAstap ? "Active [30° near pole]" : "Standard [3D Spherical/Native]")})");
+            }
+
             for (int subframeIndex = 1; subframeIndex <= exposuresCount; subframeIndex++) {
                 token.ThrowIfCancellationRequested();
                 if (exposuresCount > 1) {
@@ -468,17 +474,27 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                         break;
                     } else {
                         var currentPosition = (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
+                        Coordinates targetHint = measurementIndex == 1
+                            ? currentPosition
+                            : PredictMeasurement2Coordinates(context);
+
+                        if (measurementIndex == 2 && targetHint != null && attempt == 1 && subframeIndex == 1) {
+                            ReportLog(progress, $"[Measurement 2 Hint] Predicted coordinates: RA {targetHint.RA:F4}h, Dec {targetHint.Dec:F4}° (Offset: {context.ActiveDirection} {_settingsManager.RotationAmount:F1}°)");
+                        }
+
+                        double searchRadius = ResolveSearchRadius(solver, plateSolveSettings, targetHint, attempt);
+
                         CaptureSolverParameter solverParam = new CaptureSolverParameter {
                             Attempts = 1,
                             ReattemptDelay = TimeSpan.FromSeconds(2),
                             FocalLength = profile.TelescopeSettings.FocalLength,
                             PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
                             Binning = binVal,
-                            SearchRadius = 15.0,
+                            SearchRadius = searchRadius,
                             Regions = 5000.0,
                             MaxObjects = 500,
-                            Coordinates = measurementIndex == 1 ? currentPosition : context.Coordinates1,
-                            BlindFailoverEnabled = true,
+                            Coordinates = targetHint,
+                            BlindFailoverEnabled = false,
                             DisableNotifications = true
                         };
 
@@ -715,7 +731,9 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 ReportLog(progress, $"⚠️ Warning: Solved 3D rotation ({calibration.SolvedRotationDegrees:F1}°) differs significantly from commanded rotation ({_settingsManager.RotationAmount:F1}°). Check RA clutch tension, cable snags, or mount limits.");
             }
             
-            ReportAlignmentProgress(progress, calibration.InitialPolarAxis, context.Coordinates2.RA, latitude, context.LstMeasurement2, context.Coordinates2.Epoch);
+            var initialError = _polarSolver.CalculateErrorFromAxis(calibration.InitialPolarAxis, context.Coordinates2.RA, context.LstMeasurement2, latitude, context.Coordinates2.Epoch);
+            double latestTotalErrorArcmin = initialError.TotalErrorArcmin;
+            ReportAlignmentProgress(progress, initialError);
             progress.Report(new AlignmentProgressReport { HasSuccessfulAlignmentReached = true });
 
             if (context.MeasureOnly) {
@@ -777,13 +795,16 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                 var c2 = new Coordinates(baseRA + (new Random().NextDouble() - 0.5) * 0.015, baseDec + (new Random().NextDouble() - 0.5) * 0.015, Epoch.JNOW, Coordinates.RAType.Hours);
                                 
                                 var err = _polarSolver.EvaluateLiveError(c2, context.LstMeasurement2, calibration, latitude);
+                                latestTotalErrorArcmin = err.TotalErrorArcmin;
                                 ReportAlignmentProgress(progress, err);
                             } else {
                                 var liveHintCoords = lastLiveCoords ?? ((_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : context.Coordinates2);
+                                double liveSearchRadius = ResolveSearchRadius(solver, plateSolveSettings, liveHintCoords, attempt: 1);
+
                                 CaptureSolverParameter solverParam = new CaptureSolverParameter {
                                     Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(2), FocalLength = profile.TelescopeSettings.FocalLength,
-                                    PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0, Binning = binVal, SearchRadius = 15.0, Regions = 5000.0,
-                                    MaxObjects = 500, Coordinates = liveHintCoords, BlindFailoverEnabled = (_settingsManager.Method == RotationMethod.Manual),
+                                    PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0, Binning = binVal, SearchRadius = liveSearchRadius, Regions = 5000.0,
+                                    MaxObjects = 500, Coordinates = liveHintCoords, BlindFailoverEnabled = false,
                                     DisableNotifications = true
                                 };
 
@@ -796,6 +817,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                                         ReportStatus(progress, "Solved", "#22C55E");
                                         double lstLive = _telescopeMediator.GetInfo()?.SiderealTime ?? liveResult.Coordinates.RA;
                                         var err = _polarSolver.EvaluateLiveError(liveResult.Coordinates, lstLive, calibration, latitude);
+                                        latestTotalErrorArcmin = err.TotalErrorArcmin;
                                         ReportAlignmentProgress(progress, err);
                                     } else {
                                         ReportStatus(progress, "Could not solve", "#EF4444");
@@ -812,7 +834,23 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                             throw;
                         }
                     }
-                    await Task.Delay(100, token);
+
+                    int delayMs = 100;
+                    double baseSettle = _settingsManager.AdjustmentSettleTime;
+                    if (baseSettle > 0.0) {
+                        double scaleFactor;
+                        if (latestTotalErrorArcmin <= 1.0) {
+                            scaleFactor = 0.0;
+                        } else if (latestTotalErrorArcmin <= 3.0) {
+                            scaleFactor = 0.25;
+                        } else if (latestTotalErrorArcmin <= 10.0) {
+                            scaleFactor = 0.50;
+                        } else {
+                            scaleFactor = 1.00;
+                        }
+                        delayMs = Math.Max(100, (int)(baseSettle * scaleFactor * 1000.0));
+                    }
+                    await Task.Delay(delayMs, token);
                 }
             } catch (OperationCanceledException) {
                 if (context.IsRunningFromSequence && context.SequenceResumeTcs != null && context.SequenceResumeTcs.Task.IsCompleted) {
@@ -1369,7 +1407,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 Attempts = 1, ReattemptDelay = TimeSpan.FromSeconds(1),
                 FocalLength = profile.TelescopeSettings.FocalLength,
                 PixelSize = _cameraMediator.GetInfo()?.PixelSize ?? 0,
-                Binning = binVal, Coordinates = initialCoords, BlindFailoverEnabled = true,
+                Binning = binVal, Coordinates = initialCoords, BlindFailoverEnabled = false,
                 DisableNotifications = true, SearchRadius = 15.0, Regions = 5000.0, MaxObjects = 500
             };
 
@@ -1708,6 +1746,99 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment.Workflow {
                 }
             }
             return binVal;
+        }
+
+        private bool IsAstapSolver(IPlateSolver solver, IPlateSolveSettings settings) {
+            if (solver != null) {
+                string solverName = solver.GetType().Name;
+                if (solverName.Contains("Astap", StringComparison.OrdinalIgnoreCase)) return true;
+                if (solver.ToString().Contains("Astap", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            if (settings != null) {
+                var prop = settings.GetType().GetProperty("PlateSolverType");
+                if (prop != null) {
+                    string val = prop.GetValue(settings)?.ToString();
+                    if (val != null && val.Contains("Astap", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+            return false;
+        }
+
+        private string GetSolverDisplayName(IPlateSolver solver, IPlateSolveSettings settings) {
+            if (solver != null) {
+                string name = solver.GetType().Name;
+                if (name.EndsWith("PlateSolver", StringComparison.OrdinalIgnoreCase)) {
+                    name = name.Substring(0, name.Length - "PlateSolver".Length);
+                }
+                return name;
+            }
+            if (settings != null) {
+                var prop = settings.GetType().GetProperty("PlateSolverType");
+                if (prop != null) {
+                    string val = prop.GetValue(settings)?.ToString();
+                    if (!string.IsNullOrEmpty(val)) return val;
+                }
+            }
+            return "PlateSolver";
+        }
+
+        private double ResolveSearchRadius(IPlateSolver solver, IPlateSolveSettings settings, Coordinates hintCoordinates, int attempt = 1) {
+            bool isAstap = IsAstapSolver(solver, settings);
+            bool isNearPole = hintCoordinates != null && (Math.Abs(hintCoordinates.Dec) >= 88.0);
+
+            // Standard base search radius (15 degrees)
+            double radius = 15.0;
+
+            // Near the pole, ASTAP requires a wider search cone (at least 30°) to load the full polar cap database tiles
+            // Other solvers like PlateSolve3 use 3D spherical geometry and do not need polar expansion.
+            if (isAstap && isNearPole) {
+                radius = 30.0;
+            }
+
+            // On retries, escalate search radius to help recover from small pointing offsets
+            if (attempt > 1) {
+                if (isAstap) {
+                    radius = Math.Max(radius, attempt == 2 ? 30.0 : 45.0);
+                } else {
+                    radius = Math.Max(radius, attempt == 2 ? 20.0 : 30.0);
+                }
+            }
+
+            return radius;
+        }
+
+        /// <summary>
+        /// Predicts the expected sky coordinates for Measurement Point 2 based on Point 1 solve,
+        /// the executed RA axis rotation (direction and amount), and elapsed sidereal time (LST).
+        /// </summary>
+        private Coordinates PredictMeasurement2Coordinates(AlignmentWorkflowContext context) {
+            if (context?.Coordinates1 == null) {
+                return (_telescopeMediator.GetInfo()?.Connected ?? false) ? _telescopeMediator.GetCurrentPosition() : null;
+            }
+
+            // 1. Calculate mechanical RA rotation offset (East = +RA, West = -RA across both hemispheres)
+            double rotationDegrees = _settingsManager.RotationAmount;
+            double rotationHours = rotationDegrees / 15.0;
+            double signedRotationHours = context.ActiveDirection == RotationDirection.East ? rotationHours : -rotationHours;
+
+            // 2. Account for elapsed sidereal time (time drift) between Measurement 1 and now
+            double currentLst = (_telescopeMediator?.GetInfo()?.Connected ?? false) && !double.IsNaN(_telescopeMediator.GetInfo().SiderealTime)
+                ? _telescopeMediator.GetInfo().SiderealTime
+                : context.LstMeasurement1;
+
+            double deltaLst = currentLst - context.LstMeasurement1;
+            while (deltaLst > 12.0) deltaLst -= 24.0;
+            while (deltaLst < -12.0) deltaLst += 24.0;
+
+            // 3. Predict RA (Point 1 RA + rotation + LST drift)
+            double predictedRa = context.Coordinates1.RA + signedRotationHours + deltaLst;
+            while (predictedRa < 0.0) predictedRa += 24.0;
+            while (predictedRa >= 24.0) predictedRa -= 24.0;
+
+            // 4. Predict Dec (preserved under pure RA rotation; clamped to avoid exact pole coordinate singularity)
+            double predictedDec = Math.Clamp(context.Coordinates1.Dec, -89.95, 89.95);
+
+            return new Coordinates(predictedRa, predictedDec, context.Coordinates1.Epoch, Coordinates.RAType.Hours);
         }
 
     }

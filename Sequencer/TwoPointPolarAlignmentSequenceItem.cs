@@ -232,6 +232,19 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             }
         }
 
+        private double adjustmentSettleTime = 0.0;
+        [JsonProperty]
+        public double AdjustmentSettleTime {
+            get => adjustmentSettleTime;
+            set {
+                double clamped = double.IsNaN(value) ? 0.0 : Math.Clamp(value, 0.0, 120.0);
+                if (adjustmentSettleTime != clamped) {
+                    adjustmentSettleTime = clamped;
+                    RaisePropertyChanged(nameof(AdjustmentSettleTime));
+                }
+            }
+        }
+
         private bool enableOnePointAlignment = false;
         [JsonProperty]
         public bool EnableOnePointAlignment {
@@ -415,7 +428,8 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                                 Offset,
                                 PlateSolveRetries,
                                 EnableOnePointAlignment,
-                                ExposuresPerPoint
+                                ExposuresPerPoint,
+                                AdjustmentSettleTime
                             );
                         });
 
@@ -520,6 +534,7 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
                 Binning = this.Binning,
                 Offset = this.Offset,
                 PlateSolveRetries = this.PlateSolveRetries,
+                AdjustmentSettleTime = this.AdjustmentSettleTime,
                 EnableOnePointAlignment = this.EnableOnePointAlignment,
                 ExposuresPerPoint = this.ExposuresPerPoint,
                 AutoCompleteTolerance = this.AutoCompleteTolerance,

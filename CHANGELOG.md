@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.6.0 — Dynamic Adjustment Settle Time & Adaptive Polar Solving for ASTAP
+
+### 🚀 New Features & Enhancements
+- **Dynamic Adjustment Settle Time**:
+  - Added new `Settle Time (s)` configuration to Plugin Options, Dockable Alignment tab, and Advanced Sequencer block view (default: `0.0s` / disabled).
+  - Dynamically scales the pause between live adjustment frames based on current alignment quality:
+    - **Poor Alignment ($> 10.0'$)**: $100\%$ full settle delay (giving ample time to turn knobs and let mount vibrations damp out).
+    - **Fair Alignment ($3.0' < \text{error} \le 10.0'$)**: $50\%$ settle delay.
+    - **Good Alignment ($1.0' < \text{error} \le 3.0'$)**: $25\%$ settle delay.
+    - **Excellent Alignment ($\le 1.0'$)**: $0\text{s}$ pause (rapid real-time feedback when zeroing in on the final few arcseconds).
+  - Maintains error-tier delay across transient failed frames while knobs are being actively adjusted.
+
+### 🐛 Bug Fixes & Plate Solving Resilience
+- **Targeted Adaptive Polar Search Radius for ASTAP**:
+  - Automatically identifies the active plate solver engine.
+  - When ASTAP is detected and the telescope is pointing near the celestial pole ($\text{Dec} \ge 88.0^\circ$ or $\le -88.0^\circ$), 2PPA expands the local search radius to $30.0^\circ$. This forces ASTAP to load the entire $360^\circ$ polar cap database into memory, eliminating coordinate grid divergence failures caused by rapid RA jumps across the pole.
+  - Solvers with native 3D spherical unit-vector geometry (such as **PlateSolve3**) remain on standard $15.0^\circ$ search radius without unnecessary overhead.
+  - Measurement loops (Stations 1 and 2) now feature escalating retry radius ($30^\circ \to 45^\circ$) to recover gracefully from small initial pointing offsets before aborting.
+- **Predicted Coordinate Hint for Measurement 2**:
+  - Automatically calculates the expected sky coordinates ($\text{RA}_1 \pm \text{RotationAmount}/15.0\text{h} + \Delta\text{LST}$, preserving Dec) for Point 2 plate solving hints instead of repeating Point 1's coordinates.
+  - Eliminates plate solving failures on local spiral solvers (such as PlateSolve3) when starting alignment far from the pole (e.g. $|\text{Dec}| \le 85^\circ$) with large rotations ($60^\circ$–$90^\circ$).
+- **Active Solver Diagnostics**:
+  - Logs the active plate solver engine and polar expansion state at alignment start (e.g. `[Diagnostics] Active Plate Solver: ASTAP (Polar Expansion: Active [30° near pole])`).
+
+---
+
 ## v1.5.5.0 — Mechanical RA MoveAxis Rotation, Astrometry Latitude & Tracking Restoration
 
 ### 🐛 Bug Fixes & Hardware Hardening

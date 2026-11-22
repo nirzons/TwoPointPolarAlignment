@@ -404,6 +404,11 @@ namespace NirZonshine.NINA.TwoPointPolarAlignment {
             set => _settingsManager.PlateSolveRetries = value;
         }
 
+        public double AdjustmentSettleTime {
+            get => _settingsManager.AdjustmentSettleTime;
+            set => _settingsManager.AdjustmentSettleTime = value;
+        }
+
         public bool OverrideMountHome {
             get => _settingsManager.OverrideMountHome;
             set {

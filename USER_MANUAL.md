@@ -1,5 +1,5 @@
 # 📖 2-Point Polar Alignment - User & Operation Manual
-*Applicable Version: v1.5.5.0*
+*Applicable Version: v1.5.6.0*
 
 Welcome to the **2-Point Polar Alignment** plugin for N.I.N.A.! This manual provides clear, comprehensive, and step-by-step instructions to install, configure, and operate the plugin under real night skies.
 
@@ -72,6 +72,7 @@ Before starting, adjust these core parameters in the plugin interface:
 | **Offset** | `(Current)` or `0` | Leave empty (`""`) to display `(Current)`. Automatically inherits your active connected camera hardware offset. |
 | **Plate Solve Retries**| `5` | Recommended number of plate solving retry attempts before raising a solve failure warning. |
 | **Exposures Per Point**| `1`, `2`, or `3` | Multi-frame averaging. Captures up to 3 exposures at each station to average out seeing jitter and wind gusts. Uses unit-vector based outlier rejection. |
+| **Settle Time (s)** | `0.0` (Default) or `2.0` - `10.0`s | Pause before each live adjustment frame, giving you time to turn the Alt/Az knobs and the rig time to settle. Dynamically scaled based on alignment quality (100% for >10′, 50% for 3–10′, 25% for 1–3′, 0s for ≤1′). 0 = disabled. |
 | **Rough Finder** | `Disabled` (Default) | Automatically activates a backup Blind Solving rescue if your initial deployment error is large. OFF by default in sequencer items. |
 | **Alt Knob Visual** | `Standard` | Map Altitude instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols. |
 | **Azimuth Knob Visual**| `Standard` | Map Azimuth instructions to standard arrows, Clockwise (↻), or Counter-Clockwise (↺) symbols (perfect for single-knob AM5 mounts). |
