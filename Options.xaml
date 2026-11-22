@@ -5,6 +5,7 @@
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
     xmlns:local="clr-namespace:NirZonshine.NINA.TwoPointPolarAlignment"
     xmlns:converters="clr-namespace:NirZonshine.NINA.TwoPointPolarAlignment.Converters"
+    xmlns:behaviors="clr-namespace:NirZonshine.NINA.TwoPointPolarAlignment.Behaviors"
     xmlns:nina="clr-namespace:NINA.View.Sequencer;assembly=NINA.Sequencer">
 
     <converters:NullableNumberToStringConverter x:Key="NullableNumberConverter" />
@@ -375,13 +376,13 @@
                             <!-- Exposure Time -->
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Exposure (s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding ExposureTime, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera exposure time from Imaging tab." />
+                                <TextBox Text="{Binding ExposureTime, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera exposure time from Imaging tab." />
                             </StackPanel>
 
                             <!-- Gain -->
                             <StackPanel Grid.Row="0" Grid.Column="1" Margin="4,0,4,6">
                                 <TextBlock Text="Gain" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding Gain, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera gain from Imaging tab." />
+                                <TextBox Text="{Binding Gain, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera gain from Imaging tab." />
                             </StackPanel>
 
                             <!-- Binning Selection -->
@@ -393,7 +394,7 @@
                             <!-- Rotation Amount -->
                             <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Rotation Amount (°)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding RotationAmount, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                                <TextBox Text="{Binding RotationAmount, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
 
                             <!-- Rotation Direction -->
@@ -423,13 +424,13 @@
                             <!-- Offset -->
                             <StackPanel Grid.Row="2" Grid.Column="2" Margin="4,0,0,6">
                                 <TextBlock Text="Offset" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding Offset, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera offset from Imaging tab." />
+                                <TextBox Text="{Binding Offset, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Leave empty to use active camera offset from Imaging tab." />
                             </StackPanel>
 
                             <!-- Plate Solve Retries -->
                             <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,4,6">
                                 <TextBlock Text="Plate Solve Retries" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
+                                <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" />
                             </StackPanel>
                             <!-- Rough Finder Rescue Option -->
                             <StackPanel Grid.Row="3" Grid.Column="1" Margin="4,0,4,6">
@@ -472,7 +473,7 @@
                             <!-- Adjustment Settle Time -->
                             <StackPanel Grid.Row="5" Grid.Column="1" Margin="4,6,4,0">
                                 <TextBlock Text="Settle Time (s)" FontSize="10" Foreground="DarkGray" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding AdjustmentSettleTime, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Pause before each live adjustment frame, giving you time to turn the Alt/Az knobs and the rig time to settle. The full value is used for Poor alignment (&gt;10′), 50% for Fair (3–10′), 25% for Good (1–3′) and no pause for Excellent (≤1′). 0 = disabled." />
+                                <TextBox Text="{Binding AdjustmentSettleTime, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Height="24" VerticalContentAlignment="Center" Background="#1E1E24" BorderBrush="#3D3D45" Foreground="White" Padding="4,0" ToolTip="Pause before each live adjustment frame, giving you time to turn the Alt/Az knobs and the rig time to settle. The full value is used for Poor alignment (&gt;10′), 50% for Fair (3–10′), 25% for Good (1–3′) and no pause for Excellent (≤1′). 0 = disabled." />
                             </StackPanel>
                         </Grid>
 
@@ -613,14 +614,14 @@
                         <!-- Exposure -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Exposure Time" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding ExposureTime, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding ExposureTime, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                             <TextBlock Text="s" VerticalAlignment="Center" Margin="2,0,0,0" />
                         </StackPanel>
 
                         <!-- Gain -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Gain" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding Gain, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding Gain, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
 
                         <!-- Binning -->
@@ -632,7 +633,7 @@
                         <!-- Offset -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Offset" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding Offset, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=PropertyChanged}" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding Offset, Converter={StaticResource NullableNumberConverter}, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="60" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
 
                         <!-- Filter -->
@@ -659,7 +660,7 @@
                         <!-- Rotation Amount -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Rotation Amount" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding RotationAmount, UpdateSourceTrigger=PropertyChanged}" Width="45" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding RotationAmount, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="45" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                             <TextBlock Text="°" VerticalAlignment="Center" Margin="2,0,0,0" />
                         </StackPanel>
 
@@ -675,13 +676,13 @@
                         <!-- Plate Solve Retries -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Plate Solve Retries" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding PlateSolveRetries, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
 
                         <!-- Settle Time -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" ToolTip="Pause before each live adjustment frame, scaled dynamically based on alignment error. 0 = disabled.">
                             <TextBlock Text="Settle Time" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding AdjustmentSettleTime, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding AdjustmentSettleTime, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                             <TextBlock Text="s" VerticalAlignment="Center" Margin="2,0,0,0" />
                         </StackPanel>
 
@@ -715,20 +716,20 @@
                         <!-- Auto-Complete Tolerance -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" IsEnabled="{Binding IsAutoCompleteAllowed}" ToolTip="The target polar alignment error in arcminutes below which the sequence will automatically proceed. Set to 0 to disable.">
                             <TextBlock Text="Auto-Complete Tolerance" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding AutoCompleteTolerance, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding AutoCompleteTolerance, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                             <TextBlock Text="′" VerticalAlignment="Center" Margin="2,0,0,0" />
                         </StackPanel>
 
                         <!-- Stable Frames -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" IsEnabled="{Binding IsStableFramesAllowed}" ToolTip="Number of consecutive solved frames that must remain below the tolerance threshold before advancing.">
                             <TextBlock Text="Stable Frames" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding AutoCompleteStableExposures, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding AutoCompleteStableExposures, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
 
                         <!-- Verification Passes -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center" IsEnabled="{Binding IsVerificationPassesAllowed}" ToolTip="Number of reverse-direction validation passes to perform before final completion.">
                             <TextBlock Text="Verification Passes" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBox Text="{Binding VerificationPasses, UpdateSourceTrigger=PropertyChanged}" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
+                            <TextBox Text="{Binding VerificationPasses, UpdateSourceTrigger=LostFocus}" behaviors:TextBoxBehaviors.SelectAllOnFocus="True" Width="35" Height="22" VerticalContentAlignment="Center" TextAlignment="Right" />
                         </StackPanel>
                     </WrapPanel>
                 </StackPanel>

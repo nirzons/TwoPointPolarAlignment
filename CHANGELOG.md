@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented below. Only officially released versions published to GitHub/N.I.N.A. Store are listed.
 
+## v1.5.6.1 — Enhanced TextBox Editing & Auto-Select on Focus (2026-11-22)
+
+### 🐛 Bug Fixes & UX Polish
+- **Smooth Numeric Textbox Editing (`LostFocus` Binding)**:
+  - Fixed an issue where textboxes bound to `(Current)` (such as Exposure Time, Gain, and Offset) resisted editing, character-by-character deletion, or backspacing due to premature `PropertyChanged` validation reverting unparsed intermediate text back to `(Current)`.
+  - Switched numeric textboxes to `UpdateSourceTrigger=LostFocus`, allowing natural typing, clearing, and editing without UI interference mid-edit.
+- **Auto-Select All on Focus (`TextBoxBehaviors.SelectAllOnFocus`)**:
+  - Automatically highlights the entire contents (e.g. `(Current)` or numerical values) when clicking or tabbing into numeric input fields.
+  - Users can immediately overwrite default values by simply clicking the box and typing, without needing to manually press `Ctrl+A`.
+  - Pressing `Enter` commits the value immediately and clears keyboard focus.
+- **Robust Culture & Syntax Parsing**:
+  - Enhanced `NullableNumberToStringConverter` to support case-insensitive `(Current)` and `Current`.
+  - Added dual parsing support for both local culture and `InvariantCulture` (handling dot and comma decimal separators seamlessly).
+
+---
+
 ## v1.5.6.0 — Dynamic Adjustment Settle Time & Adaptive Polar Solving for ASTAP
 
 ### 🚀 New Features & Enhancements
